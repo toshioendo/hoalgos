@@ -1,0 +1,35 @@
+CC = gcc
+CXX = g++
+LD = $(CXX)
+
+MKL_DIR=/opt/intel/mkl
+MKL_LIBDIR=$(MKL_DIR)/lib/intel64
+
+CFLAGS = -O3 -g -I../../include
+CFLAGS += -DUSE_CPUBLAS
+LDFLAGS = -lpthread -lm
+LDFLAGS += -L$(MKL_LIBDIR) -lmkl_intel_lp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -lgomp
+
+LIBS =
+OBJS = matmul.o
+HDRS = 
+
+APP = matmul
+all: $(APP)
+
+$(APP): $(OBJS)
+	$(LD) $(OBJS) -o $@ $(LDFLAGS)
+
+%.o : %.c $(HDRS)
+	$(CC) $(CFLAGS) -c $< -o $*.o
+
+%.o : %.cc $(HDRS)
+	$(CXX) $(CFLAGS) -c $< -o $*.o
+
+clean:
+	rm -f *.o
+	rm -f *~
+	rm -f core
+	rm -f core.*
+	rm -f $(APP)
+	rm -f a.out

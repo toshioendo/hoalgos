@@ -1,0 +1,31 @@
+CC = gcc
+CXX = g++
+LD = $(CXX)
+
+CFLAGS = -O3 -g -I../../include -fopenmp -mavx2
+CFLAGS += -DUSE_CPULOOP -DUSE_OMP
+LDFLAGS = -lm -fopenmp
+
+LIBS =
+OBJS = matmul.o
+HDRS = 
+
+APP = matmul
+all: $(APP)
+
+$(APP): $(OBJS)
+	$(LD) $(OBJS) -o $@ $(LDFLAGS)
+
+%.o : %.c $(HDRS)
+	$(CC) $(CFLAGS) -c $< -o $*.o
+
+%.o : %.cc $(HDRS)
+	$(CXX) $(CFLAGS) -c $< -o $*.o
+
+clean:
+	rm -f *.o
+	rm -f *~
+	rm -f core
+	rm -f core.*
+	rm -f $(APP)
+	rm -f a.out

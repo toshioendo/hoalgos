@@ -1,0 +1,38 @@
+CC = gcc
+CXX = g++
+LD = $(CXX)
+
+CUDADIR = /usr/local/cuda
+COPTS = -O -g -I$(CUDADIR)/include -I../../include
+COPTS += -DUSE_CUDA
+
+CFLAGS = $(COPTS) -fopenmp
+NVFLAGS = $(COPTS) -Xcompiler -fopenmp -arch sm_60
+LDFLAGS = -lpthread -lm -L$(CUDADIR)/lib64 -lcudart -fopenmp
+
+LIBS =
+OBJS = main.o algo.o compcuda.o 
+HDRS = 
+
+APP = stencil
+all: $(APP)
+
+$(APP): $(OBJS)
+	$(LD) $(OBJS) -o $@ $(LDFLAGS)
+
+%.o : %.c $(HDRS)
+	$(CC) $(CFLAGS) -c $< -o $*.o
+
+%.o : %.cc $(HDRS)
+	$(CXX) $(CFLAGS) -c $< -o $*.o
+
+%.o : %.cu $(HDRS)
+	nvcc $(NVFLAGS) -c $< -o $*.o
+
+clean:
+	rm -f *.o
+	rm -f *~
+	rm -f core
+	rm -f core.*
+	rm -f $(APP)
+	rm -f a.out
