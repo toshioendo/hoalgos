@@ -9,7 +9,7 @@
 #include <assert.h>
 
 #include <homm.h>
-#include "cos.h"
+#include "stencil.h"
 
 // 3D (x,y,z)
 vec3 n3d;

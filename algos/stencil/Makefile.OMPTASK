@@ -7,7 +7,7 @@ CFLAGS += -DUSE_OMP -DUSE_OMPTASK
 LDFLAGS = -lpthread -lm -fopenmp
 
 LIBS =
-OBJS = main.o algo.o compcpu.o 
+OBJS = stencil.o algo.o compcpu.o 
 HDRS = 
 
 APP = stencil

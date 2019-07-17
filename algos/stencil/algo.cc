@@ -9,7 +9,7 @@
 #include <assert.h>
 
 #include <homm.h>
-#include "cos.h"
+#include "stencil.h"
 
 vec3 adjustindexW(long t0, long t1, vec3 vt1, vec3 rv)
 {

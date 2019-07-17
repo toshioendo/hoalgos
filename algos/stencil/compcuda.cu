@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 
 #include <homm.h>
-#include "cos.h"
+#include "stencil.h"
 
 #ifdef USE_CUDA
 

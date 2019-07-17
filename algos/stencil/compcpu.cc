@@ -5,7 +5,7 @@
 #include <assert.h>
 
 #include <homm.h>
-#include "cos.h"
+#include "stencil.h"
 
 
 int update(REAL *afrom, REAL *ato, vec3 v0, vec3 v1/*long lz0, long lz1*/)
