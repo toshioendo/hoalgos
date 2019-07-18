@@ -2,7 +2,7 @@ CC = gcc
 CXX = g++
 LD = $(CXX)
 
-CFLAGS = -O3 -g -I../../include -fopenmp -mavx2
+CFLAGS = -O3 -g -I../../include -fopenmp -march=native
 CFLAGS += -DUSE_CPULOOP -DUSE_OMP
 LDFLAGS = -lm -fopenmp
 
