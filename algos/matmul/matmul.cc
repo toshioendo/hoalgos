@@ -105,7 +105,7 @@ int base(vec3 v0, vec3 v1)
 
   REAL *A = &g.A[v0.x + v0.z * lda];
   REAL *B = &g.B[v0.z + v0.y * ldb];
-  REAL *C = &g.A[v0.x + v0.y * lda];
+  REAL *C = &g.C[v0.x + v0.y * lda];
 
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -173,7 +173,7 @@ int recalgo(vec3 v0, vec3 v1)
   else {
     // divide long dimension
     char dim;
-    if (dx >= dy*4 && dx >= dz*4) dim = 'X';
+    if (dx >= dy*16 && dx >= dz*16) dim = 'X';
     else if (dy >= dz) dim = 'Y';
     else dim = 'Z';
 
