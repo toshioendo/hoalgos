@@ -44,7 +44,8 @@ inline int homm_gfree(void *gp)
 
 inline void *homm_galloc(size_t size)
 {
-  return malloc(size);
+  //return malloc(size);
+  return valloc(size);
 }
 
 inline int homm_finish()
