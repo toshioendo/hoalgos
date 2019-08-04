@@ -46,16 +46,6 @@ int base_double_simd(vec3 v0, vec3 v1)
   for (l = 0; l < k; l += 4) {
     __m512d va0, va1;
     __m512d vb;
-#if 0
-    __m512d vb0, vb1, vb2, vb3;
-    vb0 = _mm512_load_pd(&B[l+0*ldb]);
-    vb1 = _mm512_load_pd(&B[l+1*ldb]);
-    vb2 = _mm512_load_pd(&B[l+2*ldb]);
-    vb3 = _mm512_load_pd(&B[l+3*ldb]);
-
-    const int factor = (1 << 6) | (1 << 4) | (1 << 2) | (1 << 0); // for broadcast by permute
-#endif
-    
 #define ONE_STEP(K0)				\
     va0 = _mm512_load_pd(&A[0+(l+K0)*lda]);	\
     va1 = _mm512_load_pd(&A[8+(l+K0)*lda]);	\
@@ -83,36 +73,15 @@ int base_double_simd(vec3 v0, vec3 v1)
 #undef ONE_STEP
   }
 
-  __m512d vr0, vr1, vr2, vr3;
-  vr0 = _mm512_load_pd(&C[0+0*ldc]);
-  vr1 = _mm512_load_pd(&C[0+1*ldc]);
-  vr2 = _mm512_load_pd(&C[0+2*ldc]);
-  vr3 = _mm512_load_pd(&C[0+3*ldc]);
+  _mm512_store_pd(&C[0+0*ldc], _mm512_add_pd(_mm512_load_pd(&C[0+0*ldc]), vc00));
+  _mm512_store_pd(&C[0+1*ldc], _mm512_add_pd(_mm512_load_pd(&C[0+1*ldc]), vc01));
+  _mm512_store_pd(&C[0+2*ldc], _mm512_add_pd(_mm512_load_pd(&C[0+2*ldc]), vc02));
+  _mm512_store_pd(&C[0+3*ldc], _mm512_add_pd(_mm512_load_pd(&C[0+3*ldc]), vc03));
 
-  vr0 = _mm512_add_pd(vr0, vc00);
-  vr1 = _mm512_add_pd(vr1, vc01);
-  vr2 = _mm512_add_pd(vr2, vc02);
-  vr3 = _mm512_add_pd(vr3, vc03);
-
-  _mm512_store_pd(&C[0+0*ldc], vr0);
-  _mm512_store_pd(&C[0+1*ldc], vr1);
-  _mm512_store_pd(&C[0+2*ldc], vr2);
-  _mm512_store_pd(&C[0+3*ldc], vr3);
-
-  vr0 = _mm512_load_pd(&C[8+0*ldc]);
-  vr1 = _mm512_load_pd(&C[8+1*ldc]);
-  vr2 = _mm512_load_pd(&C[8+2*ldc]);
-  vr3 = _mm512_load_pd(&C[8+3*ldc]);
-
-  vr0 = _mm512_add_pd(vr0, vc00);
-  vr1 = _mm512_add_pd(vr1, vc01);
-  vr2 = _mm512_add_pd(vr2, vc02);
-  vr3 = _mm512_add_pd(vr3, vc03);
-
-  _mm512_store_pd(&C[8+0*ldc], vr0);
-  _mm512_store_pd(&C[8+1*ldc], vr1);
-  _mm512_store_pd(&C[8+2*ldc], vr2);
-  _mm512_store_pd(&C[8+3*ldc], vr3);
+  _mm512_store_pd(&C[8+0*ldc], _mm512_add_pd(_mm512_load_pd(&C[8+0*ldc]), vc10));
+  _mm512_store_pd(&C[8+1*ldc], _mm512_add_pd(_mm512_load_pd(&C[8+1*ldc]), vc11));
+  _mm512_store_pd(&C[8+2*ldc], _mm512_add_pd(_mm512_load_pd(&C[8+2*ldc]), vc12));
+  _mm512_store_pd(&C[8+3*ldc], _mm512_add_pd(_mm512_load_pd(&C[8+3*ldc]), vc13));
 
   return 0;
 }

@@ -81,36 +81,15 @@ int base_double_simd(vec3 v0, vec3 v1)
 #undef ONE_STEP
   }
 
-  __m256d vr0, vr1, vr2, vr3;
-  vr0 = _mm256_load_pd(&C[0+0*ldc]);
-  vr1 = _mm256_load_pd(&C[0+1*ldc]);
-  vr2 = _mm256_load_pd(&C[0+2*ldc]);
-  vr3 = _mm256_load_pd(&C[0+3*ldc]);
+  _mm256_store_pd(&C[0+0*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+0*ldc]), vc00));
+  _mm256_store_pd(&C[0+1*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+1*ldc]), vc01));
+  _mm256_store_pd(&C[0+2*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+2*ldc]), vc02));
+  _mm256_store_pd(&C[0+3*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+3*ldc]), vc03));
 
-  vr0 = _mm256_add_pd(vr0, vc00);
-  vr1 = _mm256_add_pd(vr1, vc01);
-  vr2 = _mm256_add_pd(vr2, vc02);
-  vr3 = _mm256_add_pd(vr3, vc03);
-
-  _mm256_store_pd(&C[0+0*ldc], vr0);
-  _mm256_store_pd(&C[0+1*ldc], vr1);
-  _mm256_store_pd(&C[0+2*ldc], vr2);
-  _mm256_store_pd(&C[0+3*ldc], vr3);
-
-  vr0 = _mm256_load_pd(&C[4+0*ldc]);
-  vr1 = _mm256_load_pd(&C[4+1*ldc]);
-  vr2 = _mm256_load_pd(&C[4+2*ldc]);
-  vr3 = _mm256_load_pd(&C[4+3*ldc]);
-
-  vr0 = _mm256_add_pd(vr0, vc00);
-  vr1 = _mm256_add_pd(vr1, vc01);
-  vr2 = _mm256_add_pd(vr2, vc02);
-  vr3 = _mm256_add_pd(vr3, vc03);
-
-  _mm256_store_pd(&C[4+0*ldc], vr0);
-  _mm256_store_pd(&C[4+1*ldc], vr1);
-  _mm256_store_pd(&C[4+2*ldc], vr2);
-  _mm256_store_pd(&C[4+3*ldc], vr3);
+  _mm256_store_pd(&C[4+0*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+0*ldc]), vc10));
+  _mm256_store_pd(&C[4+1*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+1*ldc]), vc11));
+  _mm256_store_pd(&C[4+2*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+2*ldc]), vc12));
+  _mm256_store_pd(&C[4+3*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+3*ldc]), vc13));
 
   return 0;
 }
