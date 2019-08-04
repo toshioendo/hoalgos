@@ -198,21 +198,23 @@ int recalgo(vec3 v0, vec3 v1)
       }
       double et = Wtime();
       basetime += (et-st);
+
+      // rest part
+      if (s < idx1) {
+	long ns = s+chunklen;
+	if (ns > idx1) ns = idx1;
+	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+      }
     }
     else {
       // general case 
-      for (s = idx0; s+chunklen <= idx1; s += chunklen) {
+      for (s = idx0; s < idx1; s += chunklen) {
 	long ns = s+chunklen;
+	if (ns > idx1) ns = idx1;
 	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
       }
     }
 
-    // rest part
-    if (s < idx1) {
-      long ns = s+chunklen;
-      if (ns > idx1) ns = idx1;
-      recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
-    }
 #else
     long mid = (v0.get(dim) + v1.get(dim))/2;
     long align = g.basesize.get(dim);
