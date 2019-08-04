@@ -147,12 +147,11 @@ int recalgo(vec3 v0, vec3 v1)
 
   if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
     printf("[recalgo] (do nothing)\n");
+    printf("[recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
+	   v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
     return 0;
   }
 
-  long dx = v1.x-v0.x;
-  long dy = v1.y-v0.y;
-  long dz = v1.z-v0.z;
 
   vec3 csize = vec3sub(v1, v0);
   if (csize.x <= g.basesize.x && csize.y <= g.basesize.y && csize.z <= g.basesize.z) {
@@ -161,13 +160,45 @@ int recalgo(vec3 v0, vec3 v1)
   }
   else {
     // divide long dimension
+    const long ndiv = 8;
     char dim;
-    if (dx >= dy*4 && dx >= dz*4 && csize.x > g.basesize.x) dim = 'X';
-    else if (dy >= dz && csize.y > g.basesize.y) dim = 'Y';
+    long cx = csize.x;
+    long cy = csize.y;
+    long cz = csize.z;
+    if (cx >= cy*4 && cx >= cz*4 && csize.x > g.basesize.x) dim = 'X';
+    else if (cy >= cz && csize.y > g.basesize.y) dim = 'Y';
     else if (csize.z > g.basesize.z) dim = 'Z';
     else if (csize.y > g.basesize.y) dim = 'Y';
     else dim = 'X';
 
+#if 1
+    long len = csize.get(dim);
+    long align = g.basesize.get(dim);
+    assert(len > align);
+    // try to find chunk size which is alignsize*ndiv^i
+    long chunksize = align;
+    while (chunksize*ndiv < len) {
+      chunksize *= ndiv;
+    }
+    assert(chunksize > 0);
+
+    long idx0 = v0.get(dim);
+    long idx1 = v1.get(dim);
+    //fprintf(stderr, "start div[%c], len=%ld, chunksize=%ld\n", dim, len, chunksize);
+    long s;
+    // regular part (same chunksizes)
+    for (s = idx0; s+chunksize <= idx1; s += chunksize) {
+      long ns = s+chunksize;
+      recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+    }
+
+    // rest part
+    if (s < idx1) {
+      long ns = s+chunksize;
+      if (ns > idx1) ns = idx1;
+      recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+    }
+#else
     long mid = (v0.get(dim) + v1.get(dim))/2;
     long align = g.basesize.get(dim);
     mid = ((mid+align-1)/align)*align;
@@ -176,6 +207,7 @@ int recalgo(vec3 v0, vec3 v1)
     recalgo(v0, vec3mod(v1, dim, mid));
     // second task
     recalgo(vec3mod(v0, dim, mid), v1);
+#endif
   }
 
   return 0;

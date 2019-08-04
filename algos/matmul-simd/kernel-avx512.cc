@@ -52,9 +52,9 @@ int base_double_simd(vec3 v0, vec3 v1)
     vb1 = _mm512_load_pd(&B[l+1*ldb]);
     vb2 = _mm512_load_pd(&B[l+2*ldb]);
     vb3 = _mm512_load_pd(&B[l+3*ldb]);
-#endif
-    
+
     const int factor = (1 << 6) | (1 << 4) | (1 << 2) | (1 << 0); // for broadcast by permute
+#endif
     
 #define ONE_STEP(K0)				\
     va0 = _mm512_load_pd(&A[0+(l+K0)*lda]);	\
