@@ -176,25 +176,40 @@ int recalgo(vec3 v0, vec3 v1)
     long align = g.basesize.get(dim);
     assert(len > align);
     // try to find chunk size which is alignsize*ndiv^i
-    long chunksize = align;
-    while (chunksize*ndiv < len) {
-      chunksize *= ndiv;
+    long chunklen = align;
+    while (chunklen*ndiv < len) {
+      chunklen *= ndiv;
     }
-    assert(chunksize > 0);
+    assert(chunklen > 0);
 
     long idx0 = v0.get(dim);
     long idx1 = v1.get(dim);
-    //fprintf(stderr, "start div[%c], len=%ld, chunksize=%ld\n", dim, len, chunksize);
+    //fprintf(stderr, "start div[%c], len=%ld, chunklen=%ld\n", dim, len, chunklen);
     long s;
-    // regular part (same chunksizes)
-    for (s = idx0; s+chunksize <= idx1; s += chunksize) {
-      long ns = s+chunksize;
-      recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+    // regular part (same chunklens)
+    vec3 chunksize = vec3mod(csize, dim, chunklen);
+
+    if (vec3eq(chunksize, g.basesize)) {
+      // base regular case. kernel is called directly for optimzation
+      double st = Wtime();
+      for (s = idx0; s+chunklen <= idx1; s += chunklen) {
+	long ns = s+chunklen;
+	base_double_simd(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+      }
+      double et = Wtime();
+      basetime += (et-st);
+    }
+    else {
+      // general case 
+      for (s = idx0; s+chunklen <= idx1; s += chunklen) {
+	long ns = s+chunklen;
+	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+      }
     }
 
     // rest part
     if (s < idx1) {
-      long ns = s+chunksize;
+      long ns = s+chunklen;
       if (ns > idx1) ns = idx1;
       recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
     }

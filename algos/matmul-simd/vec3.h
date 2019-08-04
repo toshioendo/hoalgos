@@ -66,5 +66,9 @@ inline vec3 vec3mod(vec3 v, char dim, long val)
   return vr;
 }
 
+static int vec3eq(vec3 v1, vec3 v2)
+{
+  return (v1.x == v2.x && v1.y == v2.y && v1.z == v2.z);
+}
 
 #endif // __VEC3_H
