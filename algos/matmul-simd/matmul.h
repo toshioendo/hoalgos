@@ -32,7 +32,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 #include "vec3.h"
 
 vec3 basesize_double_simd();
-int base_double_simd(vec3 v0, vec3 v1);
+int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
 
 /* walltime clock (sync if GPU is used) */
 static double Wtime()

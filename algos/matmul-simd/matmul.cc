@@ -62,19 +62,15 @@ int init_mats()
   return 0;
 }
 
-int base_cpuloop(vec3 v0, vec3 v1)
+int base_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
-  long lda = g.size.x; // m
-  long ldb = g.size.z; // k
-  long ldc = g.size.x; // m
-
   long m = (long)(v1.x-v0.x);
   long n = (long)(v1.y-v0.y);
   long k = (long)(v1.z-v0.z);
 
-  REAL *A = &g.A[v0.x + v0.z * lda];
-  REAL *B = &g.B[v0.z + v0.y * ldb];
-  REAL *C = &g.C[v0.x + v0.y * lda];
+  REAL *A = &Am[v0.x + v0.z * lda];
+  REAL *B = &Bm[v0.z + v0.y * ldb];
+  REAL *C = &Cm[v0.x + v0.y * lda];
 
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -97,7 +93,7 @@ int base_cpuloop(vec3 v0, vec3 v1)
   return 0;
 }
 
-int base(vec3 v0, vec3 v1)
+int base(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
 
   double st, et;
@@ -112,10 +108,10 @@ int base(vec3 v0, vec3 v1)
   if (v1.x-v0.x == g.basesize.x &&
       v1.y-v0.y == g.basesize.y &&
       v1.z-v0.z == g.basesize.z) {
-    base_double_simd(v0, v1);
+    base_double_simd(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
   }
   else {
-    base_cpuloop(v0, v1);
+    base_cpuloop(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
   }
 
   // print periodically
@@ -138,7 +134,7 @@ int base(vec3 v0, vec3 v1)
 }
 
 
-int recalgo(vec3 v0, vec3 v1)
+int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
 #if VERBOSE >= 30
   printf("[recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
@@ -156,7 +152,7 @@ int recalgo(vec3 v0, vec3 v1)
   vec3 csize = vec3sub(v1, v0);
   if (csize.x <= g.basesize.x && csize.y <= g.basesize.y && csize.z <= g.basesize.z) {
     // base case
-    base(v0, v1);
+    base(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
   }
   else {
     // divide long dimension
@@ -190,20 +186,22 @@ int recalgo(vec3 v0, vec3 v1)
     vec3 chunksize = vec3mod(csize, dim, chunklen);
 
     if (vec3eq(chunksize, g.basesize)) {
-      // base regular case. kernel is called directly for optimzation
+      // childrens are base cases.
+      // kernel is called directly for optimzation
       double st = Wtime();
       for (s = idx0; s+chunklen <= idx1; s += chunklen) {
 	long ns = s+chunklen;
-	base_double_simd(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+	base_double_simd(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
+			 Am, lda, Bm, ldb, Cm, ldc);
       }
       double et = Wtime();
       basetime += (et-st);
 
       // rest part
       if (s < idx1) {
-	long ns = s+chunklen;
-	if (ns > idx1) ns = idx1;
-	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+	long ns = idx1;
+	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
+		Am, lda, Bm, ldb, Cm, ldc);
       }
     }
     else {
@@ -211,7 +209,8 @@ int recalgo(vec3 v0, vec3 v1)
       for (s = idx0; s < idx1; s += chunklen) {
 	long ns = s+chunklen;
 	if (ns > idx1) ns = idx1;
-	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns));
+	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
+		Am, lda, Bm, ldb, Cm, ldc);
       }
     }
 
@@ -221,22 +220,24 @@ int recalgo(vec3 v0, vec3 v1)
     mid = ((mid+align-1)/align)*align;
 
     // first task
-    recalgo(v0, vec3mod(v1, dim, mid));
+    recalgo(v0, vec3mod(v1, dim, mid),
+	    Am, lda, Bm, ldb, Cm, ldc);
     // second task
-    recalgo(vec3mod(v0, dim, mid), v1);
+    recalgo(vec3mod(v0, dim, mid), v1,
+	    Am, lda, Bm, ldb, Cm, ldc);
 #endif
   }
 
   return 0;
 }
 
-int algo(vec3 v0, vec3 v1)
+int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
 #ifdef USE_OMPTASK
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMPTASK
-  recalgo(v0, v1);
+  recalgo(vec3(0, 0, 0), vec3(m, n, k), Am, lda, Bm, ldb, Cm, ldc);
 
   return 0;
 }
@@ -300,7 +301,7 @@ int main(int argc, char *argv[])
 #endif
     st = Wtime();
 
-    algo(vec3(0,0,0), g.size);
+    algo(g.size.x, g.size.y, g.size.z, g.A, g.size.x, g.B, g.size.z, g.C, g.size.x);
 
     et = Wtime();
 

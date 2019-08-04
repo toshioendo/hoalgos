@@ -14,17 +14,14 @@ vec3 basesize_double_simd()
   return vec3(16, 4, 64);
 }
 
-int base_double_simd(vec3 v0, vec3 v1)
+int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
   int k = g.basesize.z;
   // designed for 16x4x(mul of 4)
-  long lda = g.size.x; // m
-  long ldb = g.size.z; // k
-  long ldc = g.size.x; // m
 
-  REAL *A = &g.A[v0.x + v0.z * lda];
-  REAL *B = &g.B[v0.z + v0.y * ldb];
-  REAL *C = &g.C[v0.x + v0.y * lda];
+  REAL *A = &Am[v0.x + v0.z * lda];
+  REAL *B = &Bm[v0.z + v0.y * ldb];
+  REAL *C = &Cm[v0.x + v0.y * lda];
 
   __m512d vc00, vc01, vc02, vc03;
   __m512d vc10, vc11, vc12, vc13;
