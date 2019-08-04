@@ -46,30 +46,23 @@ int base_double_simd(vec3 v0, vec3 v1)
   for (l = 0; l < k; l += 4) {
     __m256d va0, va1;
     __m256d vb;
-    __m256d vb0, vb1, vb2, vb3;
-    vb0 = _mm256_load_pd(&B[l+0*ldb]);
-    vb1 = _mm256_load_pd(&B[l+1*ldb]);
-    vb2 = _mm256_load_pd(&B[l+2*ldb]);
-    vb3 = _mm256_load_pd(&B[l+3*ldb]);
-    
-    const int factor = (1 << 6) | (1 << 4) | (1 << 2) | (1 << 0); // for broadcast by permute
-    
+    // broadcast based
 #define ONE_STEP(K0)				\
     va0 = _mm256_load_pd(&A[0+(l+K0)*lda]);	\
     va1 = _mm256_load_pd(&A[4+(l+K0)*lda]);	\
-    vb = _mm256_permute4x64_pd(vb0, K0*factor);	\
+    vb = _mm256_set1_pd(B[(l+K0)+0*ldb]);	\
     vc00 = _mm256_fmadd_pd(va0, vb, vc00);		\
     vc10 = _mm256_fmadd_pd(va1, vb, vc10);		\
     						\
-    vb = _mm256_permute4x64_pd(vb1, K0*factor);	\
+    vb = _mm256_set1_pd(B[(l+K0)+1*ldb]);	\
     vc01 = _mm256_fmadd_pd(va0, vb, vc01);		\
     vc11 = _mm256_fmadd_pd(va1, vb, vc11);		\
     						\
-    vb = _mm256_permute4x64_pd(vb2, K0*factor);	\
+    vb = _mm256_set1_pd(B[(l+K0)+2*ldb]);	\
     vc02 = _mm256_fmadd_pd(va0, vb, vc02);		\
     vc02 = _mm256_fmadd_pd(va1, vb, vc12);		\
     						\
-    vb = _mm256_permute4x64_pd(vb3, K0*factor);	\
+    vb = _mm256_set1_pd(B[(l+K0)+3*ldb]);	\
     vc03 = _mm256_fmadd_pd(va0, vb, vc03);	\
     vc13 = _mm256_fmadd_pd(va1, vb, vc13);
 
