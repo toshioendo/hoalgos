@@ -48,7 +48,11 @@ static double Wtime()
 }
 
 struct global {
+  long ndiv;
   vec3 basesize; // preferable base case size
+
+  long bufsize;
+  REAL *buf;
 };
 
 extern global g;

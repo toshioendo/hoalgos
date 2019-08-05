@@ -39,11 +39,20 @@ int init_algo()
   use_omptask = 'Y';
 #endif
 
+  g.ndiv = 8;
+
   g.basesize = basesize_double_simd();
   printf("[matmul]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
 	 use_avx2, use_avx512, use_omp, use_omptask);
   printf("[matmul] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
+
+  // for internal copy buffer
+  g.bufsize = sizeof (REAL)*(g.basesize.x*g.basesize.z + g.basesize.z*g.basesize.y 
+			     + g.basesize.x*g.basesize.y) * (g.ndiv * g.ndiv);
+  g.buf = (REAL*)homm_galloc(g.bufsize);
+
+  printf("[matmul] bufsize=%ld Bytes\n", g.bufsize);
 
   return 0;
 }
@@ -146,7 +155,6 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
   }
   else {
     // divide long dimension
-    const long ndiv = 8;
     char dim;
     long cx = csize.x;
     long cy = csize.y;
@@ -163,8 +171,8 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
     assert(len > align);
     // try to find chunk size which is alignsize*ndiv^i
     long chunklen = align;
-    while (chunklen*ndiv < len) {
-      chunklen *= ndiv;
+    while (chunklen*g.ndiv < len) {
+      chunklen *= g.ndiv;
     }
     assert(chunklen > 0);
 
@@ -188,8 +196,8 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
       // rest part
       if (s < idx1) {
 	long ns = idx1;
-	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
-		Am, lda, Bm, ldb, Cm, ldc);
+	base(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
+	     Am, lda, Bm, ldb, Cm, ldc);
       }
 
       double et = Wtime();
