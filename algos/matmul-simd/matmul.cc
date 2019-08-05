@@ -74,8 +74,8 @@ int main(int argc, char *argv[])
   
   if (argc >= 4) {
     m = atol(argv[1]);
-    m = atol(argv[2]);
-    m = atol(argv[3]);
+    n = atol(argv[2]);
+    k = atol(argv[3]);
   }
   else if (argc >= 2) {
     m = atol(argv[1]);
@@ -112,7 +112,6 @@ int main(int argc, char *argv[])
 #if 1
     printf("C[0] = %lf, C[%ld] = %lf\n", 
 	   C[0], m*n-1, C[m*n-1]);
-    printf("%.3lf sec consumed in base() kernel\n", basetime);
 #endif
 
   }

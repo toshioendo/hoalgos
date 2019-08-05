@@ -39,47 +39,55 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
     exit(1);
   }
 
+#define LOADA_STEP(L0)				\
+  va0 = _mm256_loadu_pd(&A[4+(L0)*lda]);	\
+  va1 = _mm256_loadu_pd(&A[4+(L0)*lda]);
+
+#define ONE_STEP(L0)				\
+  vb = _mm256_set1_pd(B[(L0)+0*ldb]);			\
+  vc00 = _mm256_fmadd_pd(va0, vb, vc00);		\
+  vc10 = _mm256_fmadd_pd(va1, vb, vc10);		\
+  							\
+  vb = _mm256_set1_pd(B[(L0)+1*ldb]);			\
+  vc01 = _mm256_fmadd_pd(va0, vb, vc01);		\
+  vc11 = _mm256_fmadd_pd(va1, vb, vc11);		\
+  							\
+  vb = _mm256_set1_pd(B[(L0)+2*ldb]);			\
+  vc02 = _mm256_fmadd_pd(va0, vb, vc02);		\
+  vc02 = _mm256_fmadd_pd(va1, vb, vc12);		\
+  							\
+  vb = _mm256_set1_pd(B[(L0)+3*ldb]);			\
+  vc03 = _mm256_fmadd_pd(va0, vb, vc03);		\
+  vc13 = _mm256_fmadd_pd(va1, vb, vc13);
+
   int l;
   for (l = 0; l < k; l += 4) {
     __m256d va0, va1;
     __m256d vb;
-    // broadcast based
-#define ONE_STEP(K0)				\
-    va0 = _mm256_load_pd(&A[0+(l+K0)*lda]);	\
-    va1 = _mm256_load_pd(&A[4+(l+K0)*lda]);	\
-    vb = _mm256_set1_pd(B[(l+K0)+0*ldb]);	\
-    vc00 = _mm256_fmadd_pd(va0, vb, vc00);		\
-    vc10 = _mm256_fmadd_pd(va1, vb, vc10);		\
-    						\
-    vb = _mm256_set1_pd(B[(l+K0)+1*ldb]);	\
-    vc01 = _mm256_fmadd_pd(va0, vb, vc01);		\
-    vc11 = _mm256_fmadd_pd(va1, vb, vc11);		\
-    						\
-    vb = _mm256_set1_pd(B[(l+K0)+2*ldb]);	\
-    vc02 = _mm256_fmadd_pd(va0, vb, vc02);		\
-    vc02 = _mm256_fmadd_pd(va1, vb, vc12);		\
-    						\
-    vb = _mm256_set1_pd(B[(l+K0)+3*ldb]);	\
-    vc03 = _mm256_fmadd_pd(va0, vb, vc03);	\
-    vc13 = _mm256_fmadd_pd(va1, vb, vc13);
 
-    ONE_STEP(0);
-    ONE_STEP(1);
-    ONE_STEP(2);
-    ONE_STEP(3);
-
-#undef ONE_STEP
+    LOADA_STEP(l+0);
+    ONE_STEP(l+0);
+    LOADA_STEP(l+1);
+    ONE_STEP(l+1);
+    LOADA_STEP(l+2);
+    ONE_STEP(l+2);
+    LOADA_STEP(l+3);
+    ONE_STEP(l+3);
   }
+#undef LOADA_STEP
+#undef ONE_STEP
 
-  _mm256_store_pd(&C[0+0*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+0*ldc]), vc00));
-  _mm256_store_pd(&C[0+1*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+1*ldc]), vc01));
-  _mm256_store_pd(&C[0+2*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+2*ldc]), vc02));
-  _mm256_store_pd(&C[0+3*ldc], _mm256_add_pd(_mm256_load_pd(&C[0+3*ldc]), vc03));
+  _mm256_storeu_pd(&C[0+0*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[0+0*ldc]), vc00));
+  _mm256_storeu_pd(&C[4+0*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[4+0*ldc]), vc10));
 
-  _mm256_store_pd(&C[4+0*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+0*ldc]), vc10));
-  _mm256_store_pd(&C[4+1*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+1*ldc]), vc11));
-  _mm256_store_pd(&C[4+2*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+2*ldc]), vc12));
-  _mm256_store_pd(&C[4+3*ldc], _mm256_add_pd(_mm256_load_pd(&C[4+3*ldc]), vc13));
+  _mm256_storeu_pd(&C[0+1*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[0+1*ldc]), vc01));
+  _mm256_storeu_pd(&C[4+1*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[4+1*ldc]), vc11));
+
+  _mm256_storeu_pd(&C[0+2*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[0+2*ldc]), vc02));
+  _mm256_storeu_pd(&C[4+2*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[4+2*ldc]), vc12));
+
+  _mm256_storeu_pd(&C[0+3*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[0+3*ldc]), vc03));
+  _mm256_storeu_pd(&C[4+3*ldc], _mm256_add_pd(_mm256_loadu_pd(&C[4+3*ldc]), vc13));
 
   return 0;
 }

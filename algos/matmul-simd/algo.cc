@@ -18,6 +18,8 @@ struct global g;
 
 double logtime = 0.0;
 double basetime = 0.0;
+long ncopy = 0;
+long copysize = 0;
 
 int init_algo()
 {
@@ -48,11 +50,15 @@ int init_algo()
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
 
   // for internal copy buffer
-  g.bufsize = sizeof (REAL)*(g.basesize.x*g.basesize.z + g.basesize.z*g.basesize.y 
-			     + g.basesize.x*g.basesize.y) * (g.ndiv * g.ndiv);
-  g.buf = (REAL*)homm_galloc(g.bufsize);
+#if 1
+  g.bufsize = 512*1024;
+#else
+  g.bufsize = (g.basesize.x*g.basesize.z + g.basesize.z*g.basesize.y 
+	       + g.basesize.x*g.basesize.y) * (g.ndiv * g.ndiv);
+#endif
+  g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
 
-  printf("[matmul] bufsize=%ld Bytes\n", g.bufsize);
+  printf("[matmul] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
 
   return 0;
 }
@@ -128,12 +134,81 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, lon
   return 0;
 }
 
+int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
+
 int copyandrec(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
+#if 1
+  recalgo(true, v0, v1, Am, lda, Bm, ldb, Cm, ldc);
+#else
+  // DO COPY
+  long m = (long)(v1.x-v0.x);
+  long n = (long)(v1.y-v0.y);
+  long k = (long)(v1.z-v0.z);
+
+  // TODO: copy in and out
+  //fprintf(stderr, "[copyandrec]\n");
+  REAL *p = g.buf;
+  REAL *A = &Am[v0.x + v0.z * lda];
+  REAL *B = &Bm[v0.z + v0.y * ldb];
+  REAL *C = &Cm[v0.x + v0.y * lda];
+  long align;
+  long j;
+  // copy A
+  REAL *Abuf = p;
+  align = g.basesize.get('X');
+  long ldabuf = roundup(m, align);
+  for (j = 0; j < k; j++) {
+    memcpy(p, A, sizeof(REAL)*m);
+    A += lda;
+    p += ldabuf;
+  }
+
+  copysize += sizeof(REAL)*m*k;
+
+  // copy B
+  REAL *Bbuf = p;
+  align = g.basesize.get('Z');
+  long ldbbuf = roundup(k, align);
+  for (j = 0; j < n; j++) {
+    memcpy(p, B, sizeof(REAL)*k);
+    B += ldb;
+    p += ldbbuf;
+  }
+
+  copysize += sizeof(REAL)*n*k;
+
+  // copy C
+  REAL *Cbuf = p;
+  align = g.basesize.get('X');
+  long ldcbuf = roundup(m, align);
+  for (j = 0; j < n; j++) {
+    memcpy(p, C, sizeof(REAL)*m);
+    C += ldc;
+    p += ldcbuf;
+  }
+
+  copysize += sizeof(REAL)*m*n;
+
+  recalgo(true, vec3(0,0,0), vec3(m,n,k), Abuf, ldabuf, Bbuf, ldbbuf, Cbuf, ldcbuf);
+
+  // copyback C
+  C = &Cm[v0.x + v0.y * lda];
+  align = g.basesize.get('X');
+  p = Cbuf;
+  for (j = 0; j < n; j++) {
+    memcpy(C, p, sizeof(REAL)*m);
+    C += ldc;
+    p += ldcbuf;
+  }
+
+  copysize += sizeof(REAL)*m*n;
+  ncopy++;
+#endif
   return 0;
 }
 
-int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
+int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
 #if VERBOSE >= 30
   printf("[recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
@@ -149,16 +224,19 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
 
 
   vec3 csize = vec3sub(v1, v0);
-  if (csize.x <= g.basesize.x && csize.y <= g.basesize.y && csize.z <= g.basesize.z) {
+  long cx = csize.x;
+  long cy = csize.y;
+  long cz = csize.z;
+  if (inbuf && cx <= g.basesize.x && cy <= g.basesize.y && cz <= g.basesize.z) {
     // base case
     base(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
+  }
+  else if (!inbuf && (cx*cz+cz*cy+cx*cy <= g.bufsize)) {
+    copyandrec(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
   }
   else {
     // divide long dimension
     char dim;
-    long cx = csize.x;
-    long cy = csize.y;
-    long cz = csize.z;
     if (cx >= cy*4 && cx >= cz*4 && csize.x > g.basesize.x) dim = 'X';
     else if (cy >= cz && csize.y > g.basesize.y) dim = 'Y';
     else if (csize.z > g.basesize.z) dim = 'Z';
@@ -209,7 +287,7 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
       for (s = idx0; s < idx1; s += chunklen) {
 	long ns = s+chunklen;
 	if (ns > idx1) ns = idx1;
-	recalgo(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
+	recalgo(inbuf, vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
 		Am, lda, Bm, ldb, Cm, ldc);
       }
     }
@@ -220,10 +298,10 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
     mid = ((mid+align-1)/align)*align;
 
     // first task
-    recalgo(v0, vec3mod(v1, dim, mid),
+    recalgo(inbuf, v0, vec3mod(v1, dim, mid),
 	    Am, lda, Bm, ldb, Cm, ldc);
     // second task
-    recalgo(vec3mod(v0, dim, mid), v1,
+    recalgo(inbuf, vec3mod(v0, dim, mid), v1,
 	    Am, lda, Bm, ldb, Cm, ldc);
 #endif
   }
@@ -233,11 +311,17 @@ int recalgo(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, 
 
 int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
+  ncopy = 0;
+  copysize = 0;
+  basetime = 0.0;
 #ifdef USE_OMPTASK
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMPTASK
-  recalgo(vec3(0, 0, 0), vec3(m, n, k), Am, lda, Bm, ldb, Cm, ldc);
+  recalgo(false, vec3(0, 0, 0), vec3(m, n, k), Am, lda, Bm, ldb, Cm, ldc);
+
+  printf("%.3lf sec consumed in base() kernel\n", basetime);
+  printf("buf-copied %ld time, total %ld bytes\n", ncopy, copysize);
 
   return 0;
 }

@@ -47,11 +47,15 @@ static double Wtime()
   return (double)tv.tv_sec + (double)tv.tv_usec * 0.000001;
 }
 
+#define roundup(i, align) (((size_t)(i)+(size_t)(align)-1)/(size_t)(align)*(size_t)(align))
+
+#define isaligned(i, align) (((size_t)(i) % (size_t)(align)) == 0)
+
 struct global {
   long ndiv;
   vec3 basesize; // preferable base case size
 
-  long bufsize;
+  long bufsize; // size in words
   REAL *buf;
 };
 
