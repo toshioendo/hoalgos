@@ -74,6 +74,7 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
     LOADA_STEP(l+3);
     ONE_STEP(l+3);
   }
+
 #undef LOADA_STEP
 #undef ONE_STEP
   

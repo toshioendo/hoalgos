@@ -97,9 +97,6 @@ int main(int argc, char *argv[])
   for (i = 0; i < 3; i++) {
     double st, et;
     double nops = (double)m*n*k*2.0;
-#if 1
-    basetime = 0.0;
-#endif
     st = Wtime();
 
     algo(m, n, k, A, m, B, k, C, m);

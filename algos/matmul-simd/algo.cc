@@ -17,9 +17,11 @@ struct global g;
 
 
 double logtime = 0.0;
-double basetime = 0.0;
+double kernelfasttime = 0.0;
+double kernelslowtime = 0.0;
 long ncopy = 0;
 long copysize = 0;
+double copytime = 0.0;
 
 int init_algo()
 {
@@ -51,7 +53,7 @@ int init_algo()
 
   // for internal copy buffer
 #if 1
-  g.bufsize = 512*1024;
+  g.bufsize = 8*1024*1024;
 #else
   g.bufsize = (g.basesize.x*g.basesize.z + g.basesize.z*g.basesize.y 
 	       + g.basesize.x*g.basesize.y) * (g.ndiv * g.ndiv);
@@ -110,14 +112,16 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, lon
       v1.y-v0.y == g.basesize.y &&
       v1.z-v0.z == g.basesize.z) {
     base_double_simd(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
+    et = Wtime();
+    kernelfasttime += (et-st);
   }
   else {
     base_cpuloop(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
+    et = Wtime();
+    kernelslowtime += (et-st);
   }
 
   // print periodically
-  et = Wtime();
-  basetime += (et-st);
 #if VERBOSE >= 10
 #if VERBOSE >= 30
   if (1)
@@ -138,7 +142,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb
 
 int copyandrec(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
-#if 1
+#if 01
   recalgo(true, v0, v1, Am, lda, Bm, ldb, Cm, ldc);
 #else
   // DO COPY
@@ -146,8 +150,10 @@ int copyandrec(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *C
   long n = (long)(v1.y-v0.y);
   long k = (long)(v1.z-v0.z);
 
-  // TODO: copy in and out
-  //fprintf(stderr, "[copyandrec]\n");
+  double st, et;
+  // copyin
+  printf("[copyandrec] %ld x %ld x %d\n", m, n, k);
+  st = Wtime();
   REAL *p = g.buf;
   REAL *A = &Am[v0.x + v0.z * lda];
   REAL *B = &Bm[v0.z + v0.y * ldb];
@@ -189,9 +195,12 @@ int copyandrec(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *C
   }
 
   copysize += sizeof(REAL)*m*n;
+  et = Wtime();
+  copytime += (et-st);
 
   recalgo(true, vec3(0,0,0), vec3(m,n,k), Abuf, ldabuf, Bbuf, ldbbuf, Cbuf, ldcbuf);
 
+  st = Wtime();
   // copyback C
   C = &Cm[v0.x + v0.y * lda];
   align = g.basesize.get('X');
@@ -204,6 +213,8 @@ int copyandrec(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *C
 
   copysize += sizeof(REAL)*m*n;
   ncopy++;
+  et = Wtime();
+  copytime += (et-st);
 #endif
   return 0;
 }
@@ -271,6 +282,9 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb
 			 Am, lda, Bm, ldb, Cm, ldc);
       }
 
+      double et = Wtime();
+      kernelfasttime += (et-st);
+
       // rest part
       if (s < idx1) {
 	long ns = idx1;
@@ -278,8 +292,6 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb
 	     Am, lda, Bm, ldb, Cm, ldc);
       }
 
-      double et = Wtime();
-      basetime += (et-st);
     }
     else {
       // general case 
@@ -313,15 +325,17 @@ int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *C
 {
   ncopy = 0;
   copysize = 0;
-  basetime = 0.0;
+  kernelfasttime = 0.0;
+  kernelslowtime = 0.0;
+  copytime = 0.0;
 #ifdef USE_OMPTASK
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMPTASK
   recalgo(false, vec3(0, 0, 0), vec3(m, n, k), Am, lda, Bm, ldb, Cm, ldc);
 
-  printf("%.3lf sec consumed in base() kernel\n", basetime);
-  printf("buf-copied %ld time, total %ld bytes\n", ncopy, copysize);
+  printf("%.3lf sec in fast kernel, %.3lf sec in slow kernel\n", kernelfasttime, kernelslowtime);
+  printf("buf-copied %ld time, total %ld bytes, Copy took %.3lf sec\n", ncopy, copysize, copytime);
 
   return 0;
 }
