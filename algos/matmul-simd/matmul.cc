@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
-//#include <immintrin.h>
 #include <assert.h>
 
 #include <homm.h>

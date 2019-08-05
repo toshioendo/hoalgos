@@ -19,6 +19,35 @@ struct global g;
 double logtime = 0.0;
 double basetime = 0.0;
 
+int init_algo()
+{
+  printf("Hierarchy Oblivious Matrix Multiply sample\n");
+  char use_avx2 = 'N';
+#ifdef USE_AVX2
+  use_avx2 = 'Y';
+#endif
+  char use_avx512 = 'N';
+#ifdef USE_AVX512
+  use_avx512 = 'Y';
+#endif
+  char use_omp = 'N';
+#ifdef USE_OMP
+  use_omp = 'Y';
+#endif
+  char use_omptask = 'N';
+#ifdef USE_OMPTASK
+  use_omptask = 'Y';
+#endif
+
+  g.basesize = basesize_double_simd();
+  printf("[matmul]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
+	 use_avx2, use_avx512, use_omp, use_omptask);
+  printf("[matmul] type=[%s] basesize=(%ld,%ld,%ld)\n",
+	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
+
+  return 0;
+}
+
 int base_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
   long m = (long)(v1.x-v0.x);
@@ -205,31 +234,3 @@ int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *C
   return 0;
 }
 
-int init_algo()
-{
-  printf("Hierarchy Oblivious Matrix Multiply sample\n");
-  char use_avx2 = 'N';
-#ifdef USE_AVX2
-  use_avx2 = 'Y';
-#endif
-  char use_avx512 = 'N';
-#ifdef USE_AVX512
-  use_avx512 = 'Y';
-#endif
-  char use_omp = 'N';
-#ifdef USE_OMP
-  use_omp = 'Y';
-#endif
-  char use_omptask = 'N';
-#ifdef USE_OMPTASK
-  use_omptask = 'Y';
-#endif
-
-  g.basesize = basesize_double_simd();
-  printf("[matmul]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
-	 use_avx2, use_avx512, use_omp, use_omptask);
-  printf("[matmul] type=[%s] basesize=(%ld,%ld,%ld)\n",
-	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
-
-  return 0;
-}
