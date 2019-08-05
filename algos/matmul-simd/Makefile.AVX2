@@ -8,7 +8,7 @@ CFLAGS += -DUSE_AVX2
 LDFLAGS = -lm -fopenmp
 
 LIBS =
-OBJS = matmul.o kernel-avx2.o
+OBJS = matmul.o algo.o kernel-avx2.o
 HDRS = 
 
 APP = matmul

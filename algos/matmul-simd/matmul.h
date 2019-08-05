@@ -31,8 +31,10 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 #include "vec3.h"
 
+int init_algo();
 vec3 basesize_double_simd();
 int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
+int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
 
 /* walltime clock (sync if GPU is used) */
 static double Wtime()
@@ -46,15 +48,7 @@ static double Wtime()
 }
 
 struct global {
-  vec3 size;
-  long stopsizemb;
-  REAL *A;
-  REAL *B;
-  REAL *C;
-
   vec3 basesize; // preferable base case size
-
-  double logtime;
 };
 
 extern global g;
