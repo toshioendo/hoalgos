@@ -27,6 +27,8 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
+#define USE_PACK_MAT
+
 #define VERBOSE 10
 
 #include "vec3.h"
@@ -35,6 +37,14 @@ int init_algo();
 vec3 basesize_double_simd();
 int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
 int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
+
+#ifdef USE_PACK_MAT
+long base_double_packA(REAL *A, long lda, REAL *buf);
+long base_double_packB(REAL *B, long ldb, REAL *buf);
+long base_double_packC(REAL *C, long ldc, REAL *buf);
+long base_double_unpackC(REAL *C, long ldc, REAL *buf);
+#endif
+
 
 /* walltime clock (sync if GPU is used) */
 static double Wtime()
@@ -57,6 +67,13 @@ struct global {
 
   long bufsize; // size in words
   REAL *buf;
+
+  REAL *Abuf; //packed A
+  REAL *Bbuf; //packed B
+  REAL *Cbuf; //packed C
+  long mb;
+  long nb;
+  long kb;
 };
 
 extern global g;

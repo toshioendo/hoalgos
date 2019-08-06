@@ -8,6 +8,9 @@ AVX2:
 AVX512:
 	make -f Makefile.AVX512
 
+MKL:
+	make -f Makefile.MKL
+
 
 clean:
 	rm -f *.o

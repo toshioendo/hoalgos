@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 
   // main computation
   int i;
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < 5; i++) {
     double st, et;
     double nops = (double)m*n*k*2.0;
     st = Wtime();

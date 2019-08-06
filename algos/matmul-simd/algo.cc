@@ -46,14 +46,14 @@ int init_algo()
   g.ndiv = 8;
 
   g.basesize = basesize_double_simd();
-  printf("[matmul]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
+  printf("[matmul:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
 	 use_avx2, use_avx512, use_omp, use_omptask);
-  printf("[matmul] type=[%s] basesize=(%ld,%ld,%ld)\n",
+  printf("[matmul:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
 
   // for internal copy buffer
 #if 1
-  g.bufsize = 8*1024*1024;
+  g.bufsize = 128*1024*1024;
 #else
   g.bufsize = (g.basesize.x*g.basesize.z + g.basesize.z*g.basesize.y 
 	       + g.basesize.x*g.basesize.y) * (g.ndiv * g.ndiv);
@@ -270,12 +270,14 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb
     //fprintf(stderr, "start div[%c], len=%ld, chunklen=%ld\n", dim, len, chunklen);
     // regular part (same chunklens)
     vec3 chunksize = vec3mod(csize, dim, chunklen);
+    vec3 diffvec = vec3mod(vec3(0,0,0), dim, chunklen);
 
     if (vec3eq(chunksize, g.basesize)) {
       // childrens are base cases.
       // kernel is called directly for optimzation
       double st = Wtime();
       long s;
+      //printf("calling fast kernels. dim=%c\n", dim);
       for (s = idx0; s+chunklen <= idx1; s += chunklen) {
 	long ns = s+chunklen;
 	base_double_simd(vec3mod(v0, dim, s), vec3mod(v1, dim, ns),
@@ -321,21 +323,124 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb
   return 0;
 }
 
+#ifdef USE_PACK_MAT
+int pack_mats(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
+{
+  double st = Wtime();
+  long mup = roundup(m, g.basesize.x);
+  long nup = roundup(n, g.basesize.y);
+  long kup = roundup(k, g.basesize.z);
+  if (mup*nup + nup*kup + mup*kup >= g.bufsize) {
+    printf("(%d,%d,%d) is too large. to be fixed\n", m, n, k);
+  }
+
+  g.mb = mup/g.basesize.x;
+  g.nb = nup/g.basesize.y;
+  g.kb = kup/g.basesize.z;
+
+  long i, j, l;
+  long s;
+  REAL *p = g.buf;
+  g.Abuf = p;
+  for (l = 0; l < kup; l += g.basesize.z) {
+    for (i = 0; i < mup; i += g.basesize.x) {
+      s = base_double_packA(&Am[i+l*lda], lda, p);
+      p += s;
+    }
+  }
+  g.Bbuf = p;
+  for (j = 0; j < nup; j += g.basesize.y) {
+    for (l = 0; l < kup; l += g.basesize.z) {
+      s = base_double_packB(&Bm[l+j*lda], ldb, p);
+      p += s;
+    }
+  }
+  g.Cbuf = p;
+  for (j = 0; j < nup; j += g.basesize.y) {
+    for (i = 0; i < mup; i += g.basesize.x) {
+      s = base_double_packC(&Cm[i+j*lda], ldc, p);
+      p += s;
+    }
+  }
+
+  double et = Wtime();
+  copytime += (et-st);
+
+  return 0;
+}
+
+int unpack_mats(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
+{
+  double st = Wtime();
+  long mup = roundup(m, g.basesize.x);
+  long nup = roundup(n, g.basesize.y);
+  long kup = roundup(k, g.basesize.z);
+
+  long i, j;
+  long s;
+  REAL *p = g.Cbuf;
+  for (j = 0; j < nup; j += g.basesize.y) {
+    for (i = 0; i < mup; i += g.basesize.x) {
+      s = base_double_unpackC(&Cm[i+j*lda], ldc, p);
+      p += s;
+    }
+  }
+
+  double et = Wtime();
+  copytime += (et-st);
+  return 0;
+}
+#endif
+
 int algo(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
+  printf("[matmul:algo] type=[%s] size=(%ld,%ld,%ld) basesize=(%ld,%ld,%ld)\n",
+	 TYPENAME, m, n, k, g.basesize.x, g.basesize.y, g.basesize.z);
+#if 01
+  // Recursive algorithm
   ncopy = 0;
   copysize = 0;
   kernelfasttime = 0.0;
   kernelslowtime = 0.0;
   copytime = 0.0;
+
+#ifdef USE_PACK_MAT
+  pack_mats(m, n, k, Am, lda, Bm, ldb, Cm, ldc);
+#endif
+
 #ifdef USE_OMPTASK
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMPTASK
   recalgo(false, vec3(0, 0, 0), vec3(m, n, k), Am, lda, Bm, ldb, Cm, ldc);
 
-  printf("%.3lf sec in fast kernel, %.3lf sec in slow kernel\n", kernelfasttime, kernelslowtime);
-  printf("buf-copied %ld time, total %ld bytes, Copy took %.3lf sec\n", ncopy, copysize, copytime);
+#ifdef USE_PACK_MAT
+  unpack_mats(m, n, k, Am, lda, Bm, ldb, Cm, ldc);
+#endif
+
+#else
+#warning Non-recursive. loop-based algorithm
+  long i, j, l;
+  long ms = g.basesize.x;
+  long ns = g.basesize.y;
+  long ks = g.basesize.z;
+  for (j = 0; j < n; j += ns) {
+    for (l = 0; l < k; l += ks) {
+      for (i = 0; i < m; i += ms) {
+	base_double_simd(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
+			 Am, lda, Bm, ldb, Cm, ldc);
+      }
+    }
+  }
+
+  if (m % ms != 0 || n % ns != 0 || k % ks != 0) {
+    printf("TODO: I must consider indivible cases!\n");
+  }
+#endif
+
+  printf("[matmul:algo] %.3lf sec in fast kernel, %.3lf sec in slow kernel\n", kernelfasttime, kernelslowtime);
+  printf("[matmul:algo] buf-copied %ld time, total %ld bytes, Copy took %.3lf sec\n", ncopy, copysize, copytime);
+
 
   return 0;
 }
