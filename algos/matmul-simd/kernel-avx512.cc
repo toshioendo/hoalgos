@@ -11,21 +11,30 @@
 
 vec3 basesize_double_simd()
 {
-  return vec3(16, 8, 64);
+  return vec3(16, 8, 256/*64*/);
 }
 
 #ifdef USE_PACK_MAT
 long base_double_pack_gen(long m, long n, REAL *A, long lda, REAL *buf)
 {
-  assert(m % 8 == 0);
+  assert(m % 8 == 0 && n % 4 == 0);
   REAL *Ap = A;
+#if 0
   for (long j = 0; j < n; j++) {
     for (long i = 0; i < m; i+=8) {
-      _mm512_storeu_pd(buf+i, _mm512_loadu_pd(A+i));
+      _mm512_storeu_pd(&buf[i+j*m], _mm512_loadu_pd(&A[i+j*lda]));
     }
-    A += lda;
-    buf += m;
   }
+#else
+  for (long j = 0; j < n; j += 4) {
+    for (long i = 0; i < m; i+=8) {
+      _mm512_storeu_pd(&buf[i+(j+0)*m], _mm512_loadu_pd(&A[i+(j+0)*lda]));
+      _mm512_storeu_pd(&buf[i+(j+1)*m], _mm512_loadu_pd(&A[i+(j+1)*lda]));
+      _mm512_storeu_pd(&buf[i+(j+2)*m], _mm512_loadu_pd(&A[i+(j+2)*lda]));
+      _mm512_storeu_pd(&buf[i+(j+3)*m], _mm512_loadu_pd(&A[i+(j+3)*lda]));
+    }
+  }
+#endif
 
   return m*n;
 }
@@ -47,15 +56,24 @@ long base_double_packC(REAL *C, long ldc, REAL *buf)
 
 long base_double_unpack_gen(long m, long n, REAL *A, long lda, REAL *buf)
 {
-  assert(m % 8 == 0);
+  assert(m % 8 == 0 && n % 4 == 0);
   REAL *Ap = A;
+#if 0
   for (long j = 0; j < n; j++) {
     for (long i = 0; i < m; i+=8) {
-      _mm512_storeu_pd(A+i, _mm512_loadu_pd(buf+i));
+      _mm512_storeu_pd(&A[i+j*lda], _mm512_loadu_pd(&buf[i+j*m]));
     }
-    A += lda;
-    buf += m;
   }
+#else
+  for (long j = 0; j < n; j += 4) {
+    for (long i = 0; i < m; i+=8) {
+      _mm512_storeu_pd(&A[i+(j+0)*lda], _mm512_loadu_pd(&buf[i+(j+0)*m]));
+      _mm512_storeu_pd(&A[i+(j+1)*lda], _mm512_loadu_pd(&buf[i+(j+1)*m]));
+      _mm512_storeu_pd(&A[i+(j+2)*lda], _mm512_loadu_pd(&buf[i+(j+2)*m]));
+      _mm512_storeu_pd(&A[i+(j+3)*lda], _mm512_loadu_pd(&buf[i+(j+3)*m]));
+    }
+  }
+#endif
 
   return m*n;
 }
@@ -70,17 +88,19 @@ long base_double_unpackC(REAL *C, long ldc, REAL *buf)
 
 int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
-  long k = g.basesize.z;
+  const long m = g.basesize.x;
+  const long n = g.basesize.y;
+  const long k = g.basesize.z;
   // designed for 16x4x(mul of 4)
 
 #ifdef USE_PACK_MAT
-  long ib = v0.x/16; // g.basesize.x
-  long jb = v0.y/8; // g.basesize.y
+  long ib = v0.x/m; // g.basesize.x
+  long jb = v0.y/n; // g.basesize.y
   long lb = v0.z/k; // g.basesize.z
 
-  REAL *A = &g.Abuf[(ib+lb*g.mb)*16*k];
-  REAL *B = &g.Bbuf[(lb+jb*g.kb)*k*8];
-  REAL *C = &g.Cbuf[(ib+jb*g.mb)*16*8];
+  REAL *A = &g.Abuf[(ib+lb*g.mb)*m*k];
+  REAL *B = &g.Bbuf[(lb+jb*g.kb)*k*n];
+  REAL *C = &g.Cbuf[(ib+jb*g.mb)*m*n];
   // overwrite lda, ldb, ldc
   lda = 16; // g.basesize.x;
   ldb = k; // g.basesize.x;
