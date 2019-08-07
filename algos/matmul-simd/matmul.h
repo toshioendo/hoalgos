@@ -29,6 +29,8 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 #define USE_PACK_MAT
 
+#define USE_TRANSB
+
 #define VERBOSE 10
 
 #include "vec3.h"

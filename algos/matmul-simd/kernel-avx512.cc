@@ -11,7 +11,7 @@
 
 vec3 basesize_double_simd()
 {
-  return vec3(16, 8, 256/*64*/);
+  return vec3(16, 8, 256);
 }
 
 #ifdef USE_PACK_MAT
@@ -39,6 +39,21 @@ long base_double_pack_gen(long m, long n, REAL *A, long lda, REAL *buf)
   return m*n;
 }
 
+long base_double_pack_genT(long m, long n, REAL *A, long lda, REAL *buf)
+{
+  assert(m % 8 == 0 && n % 8 == 0);
+
+  for (long i = 0; i < m; i++) {
+    for (long j = 0; j < n; j += 8) {
+      __m512d v = _mm512_set_pd(A[i+(j+7)*lda], A[i+(j+6)*lda], A[i+(j+5)*lda], A[i+(j+4)*lda], 
+				A[i+(j+3)*lda], A[i+(j+2)*lda], A[i+(j+1)*lda], A[i+(j+0)*lda]);
+      _mm512_storeu_pd(&buf[j+i*n], v);
+    }
+  }
+
+  return m*n;
+}
+
 long base_double_packA(REAL *A, long lda, REAL *buf)
 {
   return base_double_pack_gen(g.basesize.x, g.basesize.z, A, lda, buf);
@@ -46,7 +61,11 @@ long base_double_packA(REAL *A, long lda, REAL *buf)
 
 long base_double_packB(REAL *B, long ldb, REAL *buf)
 {
+#ifdef USE_TRANSB
+  return base_double_pack_genT(g.basesize.z, g.basesize.y, B, ldb, buf);
+#else
   return base_double_pack_gen(g.basesize.z, g.basesize.y, B, ldb, buf);
+#endif
 }
 
 long base_double_packC(REAL *C, long ldc, REAL *buf)
@@ -103,7 +122,11 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
   REAL *C = &g.Cbuf[(ib+jb*g.mb)*m*n];
   // overwrite lda, ldb, ldc
   lda = 16; // g.basesize.x;
-  ldb = k; // g.basesize.x;
+#ifdef USE_TRANSB
+  ldb = 8; // g.basesize.y;
+#else
+  ldb = k; // g.basesize.z;
+#endif
   ldc = 16; // g.basesize.x;
 #else
   REAL *A = &Am[v0.x + v0.z * lda];
@@ -139,36 +162,42 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
   va0 = _mm512_loadu_pd(&A[0+(L0)*lda]);		\
   va1 = _mm512_loadu_pd(&A[8+(L0)*lda]);
 
+#ifdef USE_TRANSB
+#define BELEM(i,j) (B[(j)+(i)*ldb])
+#else
+#define BELEM(i,j) (B[(i)+(j)*ldb])
+#endif
+
 #define ONE_STEP(L0)					\
-  vb = _mm512_set1_pd(B[(L0)+0*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 0));			\
   vc00 = _mm512_fmadd_pd(va0, vb, vc00);		\
   vc10 = _mm512_fmadd_pd(va1, vb, vc10);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+1*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 1));			\
   vc01 = _mm512_fmadd_pd(va0, vb, vc01);		\
   vc11 = _mm512_fmadd_pd(va1, vb, vc11);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+2*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 2));			\
   vc02 = _mm512_fmadd_pd(va0, vb, vc02);		\
   vc02 = _mm512_fmadd_pd(va1, vb, vc12);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+3*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 3));			\
   vc03 = _mm512_fmadd_pd(va0, vb, vc03);		\
   vc13 = _mm512_fmadd_pd(va1, vb, vc13);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+4*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 4));			\
   vc04 = _mm512_fmadd_pd(va0, vb, vc04);		\
   vc14 = _mm512_fmadd_pd(va1, vb, vc14);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+5*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 5));			\
   vc05 = _mm512_fmadd_pd(va0, vb, vc05);		\
   vc15 = _mm512_fmadd_pd(va1, vb, vc15);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+6*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 6));			\
   vc06 = _mm512_fmadd_pd(va0, vb, vc06);		\
   vc16 = _mm512_fmadd_pd(va1, vb, vc16);		\
   							\
-  vb = _mm512_set1_pd(B[(L0)+7*ldb]);			\
+  vb = _mm512_set1_pd(BELEM(L0, 7));			\
   vc07 = _mm512_fmadd_pd(va0, vb, vc07);		\
   vc17 = _mm512_fmadd_pd(va1, vb, vc17);		
 
