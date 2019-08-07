@@ -158,15 +158,31 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
     exit(1);
   }
 
+#if 1
+
 #define LOADA_STEP(L0)					\
   va0 = _mm512_loadu_pd(&A[0+(L0)*lda]);		\
   va1 = _mm512_loadu_pd(&A[8+(L0)*lda]);
 
-#ifdef USE_TRANSB
-#define BELEM(i,j) (B[(j)+(i)*ldb])
 #else
+
+#define LOADA_STEP(L0)					\
+  va0 = _mm512_loadu_pd(&A[0+(L0)*lda]);		\
+  va1 = _mm512_loadu_pd(&A[8+(L0)*lda]);		\
+  _mm_prefetch(&A[0+(L0)*lda + m*k], _MM_HINT_T1);	\
+  _mm_prefetch(&A[8+(L0)*lda + m*k], _MM_HINT_T1);
+
+#endif  
+
+#ifdef USE_TRANSB
+
+#define BELEM(i,j) (B[(j)+(i)*ldb])
+
+#else // !USE_TRANSB
+
 #define BELEM(i,j) (B[(i)+(j)*ldb])
-#endif
+
+#endif // USE_TRANSB
 
 #define ONE_STEP(L0)					\
   vb = _mm512_set1_pd(BELEM(L0, 0));			\
@@ -205,6 +221,7 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
   for (l = 0; l < k; l += 4) {
     __m512d va0, va1;
     __m512d vb;
+    __m512d vb0;
     
     LOADA_STEP(l+0);
     ONE_STEP(l+0);
