@@ -202,7 +202,7 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
   vc17 = _mm512_fmadd_pd(va1, vb, vc17);		
 
   long l;
-  for (l = 0; l < k; l += 8) {
+  for (l = 0; l < k; l += 4) {
     __m512d va0, va1;
     __m512d vb;
     
@@ -214,14 +214,6 @@ int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, R
     ONE_STEP(l+2);
     LOADA_STEP(l+3);
     ONE_STEP(l+3);
-    LOADA_STEP(l+4);
-    ONE_STEP(l+4);
-    LOADA_STEP(l+5);
-    ONE_STEP(l+5);
-    LOADA_STEP(l+6);
-    ONE_STEP(l+6);
-    LOADA_STEP(l+7);
-    ONE_STEP(l+7);
   }
 
 #undef LOADA_STEP
