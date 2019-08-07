@@ -140,85 +140,6 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, lon
 
 int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
 
-int copyandrec(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
-{
-#if 01
-  recalgo(true, v0, v1, Am, lda, Bm, ldb, Cm, ldc);
-#else
-  // DO COPY
-  long m = (long)(v1.x-v0.x);
-  long n = (long)(v1.y-v0.y);
-  long k = (long)(v1.z-v0.z);
-
-  double st, et;
-  // copyin
-  printf("[copyandrec] %ld x %ld x %d\n", m, n, k);
-  st = Wtime();
-  REAL *p = g.buf;
-  REAL *A = &Am[v0.x + v0.z * lda];
-  REAL *B = &Bm[v0.z + v0.y * ldb];
-  REAL *C = &Cm[v0.x + v0.y * lda];
-  long align;
-  long j;
-  // copy A
-  REAL *Abuf = p;
-  align = g.basesize.get('X');
-  long ldabuf = roundup(m, align);
-  for (j = 0; j < k; j++) {
-    memcpy(p, A, sizeof(REAL)*m);
-    A += lda;
-    p += ldabuf;
-  }
-
-  copysize += sizeof(REAL)*m*k;
-
-  // copy B
-  REAL *Bbuf = p;
-  align = g.basesize.get('Z');
-  long ldbbuf = roundup(k, align);
-  for (j = 0; j < n; j++) {
-    memcpy(p, B, sizeof(REAL)*k);
-    B += ldb;
-    p += ldbbuf;
-  }
-
-  copysize += sizeof(REAL)*n*k;
-
-  // copy C
-  REAL *Cbuf = p;
-  align = g.basesize.get('X');
-  long ldcbuf = roundup(m, align);
-  for (j = 0; j < n; j++) {
-    memcpy(p, C, sizeof(REAL)*m);
-    C += ldc;
-    p += ldcbuf;
-  }
-
-  copysize += sizeof(REAL)*m*n;
-  et = Wtime();
-  copytime += (et-st);
-
-  recalgo(true, vec3(0,0,0), vec3(m,n,k), Abuf, ldabuf, Bbuf, ldbbuf, Cbuf, ldcbuf);
-
-  st = Wtime();
-  // copyback C
-  C = &Cm[v0.x + v0.y * lda];
-  align = g.basesize.get('X');
-  p = Cbuf;
-  for (j = 0; j < n; j++) {
-    memcpy(C, p, sizeof(REAL)*m);
-    C += ldc;
-    p += ldcbuf;
-  }
-
-  copysize += sizeof(REAL)*m*n;
-  ncopy++;
-  et = Wtime();
-  copytime += (et-st);
-#endif
-  return 0;
-}
-
 int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
 {
 #if VERBOSE >= 30
@@ -241,9 +162,6 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb
   if (inbuf && cx <= g.basesize.x && cy <= g.basesize.y && cz <= g.basesize.z) {
     // base case
     base(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
-  }
-  else if (!inbuf && (cx*cz+cz*cy+cx*cy <= g.bufsize)) {
-    copyandrec(v0, v1, Am, lda, Bm, ldb, Cm, ldc);
   }
   else {
     // divide long dimension
