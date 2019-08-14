@@ -144,7 +144,7 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 
   st = Wtime();
 
-  if (v0.x == v0.y || v0.x == v0.z || v0.y == v0.z) {
+  if (v0.x == v0.z || v0.y == v0.z) {
     base_pivot_cpuloop(v0, v1, Am, lda);
     et = Wtime();
     kernel1time += (et-st);
@@ -288,40 +288,50 @@ int algo(long n, REAL *Am, long lda)
 {
   printf("[APSP:algo] type=[%s] size=%ld\n",
 	 TYPENAME, n);
-#if 1 /////////////
-  // Recursive algorithm
+
+  if (n % g.basesize.x != 0) {
+    printf("[APSP:algo] ERROR: currently, size (%ld) must be a multiple of %ld\n",
+	   n, g.basesize.x);
+    exit(1);
+  }
+
+  // statistics
   ncopy = 0;
   copysize = 0;
+  copytime = 0.0;
   kernel1time = 0.0;
   kernel2time = 0.0;
-  copytime = 0.0;
+  kernel1count = 0;
+  kernel2count = 0;
+
+#if 0 /////////////
+  // Recursive algorithm
 
   recAPSP(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
 
-#elif 1 ///////////
+#elif 0 ///////////
 #warning base slow algorithm for debug
 
   base(vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+  printf("[APSP:algo] BASE SLOW ALGORITHM is used\n");
 
 #else ///////////
 #warning Non-recursive. loop-based algorithm
-#error not implemented yet
   long i, j, l;
   long ms = g.basesize.x;
   long ns = g.basesize.y;
   long ks = g.basesize.z;
-  for (j = 0; j < n; j += ns) {
-    for (l = 0; l < k; l += ks) {
-      for (i = 0; i < m; i += ms) {
-	base_double_simd(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
-			 Am, lda, Bm, ldb, Cm, ldc);
+  for (l = 0; l < n; l += ks) {
+    for (j = 0; j < n; j += ns) {
+      for (i = 0; i < n; i += ms) {
+	base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
+	     Am, lda);
       }
     }
   }
 
-  if (m % ms != 0 || n % ns != 0 || k % ks != 0) {
-    printf("TODO: I must consider indivible cases!\n");
-  }
+  printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
+
 #endif
 
   printf("[matmul:algo] pivot kernel: %.3lf sec, %ld times\n",
