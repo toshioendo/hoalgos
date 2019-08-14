@@ -304,7 +304,7 @@ int algo(long n, REAL *Am, long lda)
   kernel1count = 0;
   kernel2count = 0;
 
-#if 0 /////////////
+#if 1 /////////////
   // Recursive algorithm
 
   recAPSP(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);

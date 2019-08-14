@@ -27,11 +27,11 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-#define USE_PACK_MAT
+//#define USE_PACK_MAT
 
-#define USE_TRANSB
+//#define USE_TRANSB
 
-#define VERBOSE 30
+#define VERBOSE 10
 
 #include "vec3.h"
 
