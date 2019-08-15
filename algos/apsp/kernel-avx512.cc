@@ -9,18 +9,23 @@
 #include <homm.h>
 #include "apsp.h"
 
+
 vec3 basesize_float_simd()
 {
+#ifdef USE_COALESCED_KERNEL
+  return vec3(16*2, 16*2, 16*2);
+#else
   return vec3(16, 16, 16);
+#endif
 }
 
 // This kernel can be used both for pivot computation and nonpivot computation
 // since L-loop is outermost
 int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 {
-  const long m = g.basesize.x;
-  const long n = g.basesize.y;
-  const long k = g.basesize.z;
+  const long m = v1.x-v0.x;
+  const long n = v1.y-v0.y;
+  const long k = v1.z-v0.z;
   // designed for 16x16x(mul of 4)
 
 #if 1
@@ -35,6 +40,7 @@ int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
   const REAL infval = 1.0e+8;
 #define INITC() (_mm512_set1_ps(infval))
+
   vc00 = INITC();
   vc01 = INITC();
   vc02 = INITC();
@@ -55,16 +61,7 @@ int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 #define LOADA_STEP(L0)					\
   va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);
 
-
-#ifdef USE_TRANSB
-
-#define BELEM(i,j) (B[(j)+(i)*ldb])
-
-#else // !USE_TRANSB
-
 #define BELEM(i,j) (B[(i)+(j)*ldb])
-
-#endif // USE_TRANSB
 
 #define ONE_COL(L0, J0, CNAME) \
   {							\
@@ -144,3 +141,71 @@ int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
+#ifdef USE_COALESCED_KERNEL
+int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+{
+  assert(vec3eq(g.basesize, vec3sub(v1, v0)));
+  long chunklen = 16;
+  long x0 = v0.x;
+  long x1 = v1.x;
+  long y0 = v0.y;
+  long y1 = v1.y;
+  long z0 = v0.z;
+  long z1 = v1.z;
+
+  long xm = x0+chunklen;
+  long ym = y0+chunklen;
+  long zm = z0+chunklen;
+
+  // divide task into 8
+  // 1
+  base_gen_float_simd(vec3(x0, y0, z0), vec3(xm, ym, zm), Am, lda);
+  // 2
+  base_gen_float_simd(vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
+  // 3
+  base_gen_float_simd(vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
+#if 1
+  // 4 & 5
+  base_gen_float_simd(vec3(xm, ym, z0), vec3(x1, y1, z1), Am, lda);
+#else
+  // 4
+  base_gen_float_simd(vec3(xm, ym, z0), vec3(x1, y1, zm), Am, lda);
+  // 5
+  base_gen_float_simd(vec3(xm, ym, zm), vec3(x1, y1, z1), Am, lda);
+#endif
+  // 6
+  base_gen_float_simd(vec3(x0, ym, zm), vec3(xm, y1, z1), Am, lda);
+  // 7
+  base_gen_float_simd(vec3(xm, y0, zm), vec3(x1, ym, z1), Am, lda);
+  // 8
+  base_gen_float_simd(vec3(x0, y0, zm), vec3(xm, ym, z1), Am, lda);
+  return 0;
+}
+
+int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+{
+  assert(vec3eq(g.basesize, vec3sub(v1, v0)));
+  long chunklen = 16;
+  long x0 = v0.x;
+  long x1 = v1.x;
+  long y0 = v0.y;
+  long y1 = v1.y;
+  long z0 = v0.z;
+  long z1 = v1.z;
+
+  long xm = x0+chunklen;
+  long ym = y0+chunklen;
+
+  // divide task into 4 (as large as possible)
+  // 1
+  base_gen_float_simd(vec3(x0, y0, z0), vec3(xm, ym, z1), Am, lda);
+  // 2
+  base_gen_float_simd(vec3(xm, y0, z0), vec3(x1, ym, z1), Am, lda);
+  // 3
+  base_gen_float_simd(vec3(x0, ym, z0), vec3(xm, y1, z1), Am, lda);
+  // 4
+  base_gen_float_simd(vec3(xm, ym, z0), vec3(x1, y1, z1), Am, lda);
+  return 0;
+}
+
+#endif

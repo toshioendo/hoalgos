@@ -130,7 +130,7 @@ int base_nonpivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
-int base(vec3 v0, vec3 v1, REAL *Am, long lda)
+inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 {
 
   double st, et;
@@ -148,9 +148,6 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #else
     base_pivot_cpuloop(v0, v1, Am, lda);
 #endif
-    et = Wtime();
-    kernel1time += (et-st);
-    kernel1count++;
   }
   else {
 #if 1
@@ -158,11 +155,11 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #else
     base_nonpivot_cpuloop(v0, v1, Am, lda);
 #endif
-    et = Wtime();
-    kernel2time += (et-st);
-    kernel2count++;
   }
 
+  et = Wtime();
+  kernel1time += (et-st);
+  kernel1count++;
 
   // print periodically
 #if VERBOSE >= 10
@@ -183,7 +180,7 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 
 int recMM(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda);
 
-int recAPSP(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
+int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 {
 #if VERBOSE >= 30
   printf("[recAPSP] [(%d,%d,%d), (%d,%d,%d))\n",
@@ -191,103 +188,86 @@ int recAPSP(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 #endif
 
   if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
-    printf("[recAPSP] (do nothing)\n");
-    printf("[recAPSP] [(%d,%d,%d), (%d,%d,%d))\n",
-	   v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
-    return 0;
-  }
-
-  assert(v0.x == v0.y && v0.x == v0.z);
-  assert(v1.x == v1.y && v1.x == v1.z);
-
-  long cdim = v1.x-v0.x;
-  if (cdim <= g.basesize.x) {
-    // base case
-    base(v0, v1, Am, lda);
-  }
-  else {
-    // divide the task into 8
-    long n0 = v0.x;
-    long n1 = v1.x;
-    long nm = (n0+n1)/2;
-    long align = g.basesize.x; //
-    nm = ((nm+align-1)/align)*align;
-
-    // 1
-    recAPSP(inbuf, vec3(n0, n0, n0), vec3(nm, nm, nm),
-	    Am, lda);
-    // 2
-    recMM(inbuf, vec3(nm, n0, n0), vec3(n1, nm, nm),
-	  Am, lda);
-    // 3
-    recMM(inbuf, vec3(n0, nm, n0), vec3(nm, n1, nm),
-	  Am, lda);
-    // 4
-    recMM(inbuf, vec3(nm, nm, n0), vec3(n1, n1, nm),
-	  Am, lda);
-    // 5
-    recAPSP(inbuf, vec3(nm, nm, nm), vec3(n1, n1, n1),
-	    Am, lda);
-    // 6
-    recMM(inbuf, vec3(n0, nm, nm), vec3(nm, n1, n1),
-	  Am, lda);
-    // 7
-    recMM(inbuf, vec3(nm, n0, nm), vec3(n1, nm, n1),
-	  Am, lda);
-    // 8
-    recMM(inbuf, vec3(n0, n0, nm), vec3(nm, nm, n1),
-	  Am, lda);
-
-  }
-
-  return 0;
-}
-
-int recMM(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
-{
-#if VERBOSE >= 30
-  printf("[recMM] [(%d,%d,%d), (%d,%d,%d))\n",
-	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
-#endif
-
-  if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
-    printf("[recMM] (do nothing)\n");
-    printf("[recMM] [(%d,%d,%d), (%d,%d,%d))\n",
+    printf("[recalgo] (do nothing)\n");
+    printf("[recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
 	   v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
     return 0;
   }
 
   vec3 csize = vec3sub(v1, v0);
-  long cx = csize.x;
-  long cy = csize.y;
-  long cz = csize.z;
+  long cx = v1.x-v0.x;
+  long cy = v1.y-v0.y;
+  long cz = v1.z-v0.z;
   if (cx <= g.basesize.x && cy <= g.basesize.y && cz <= g.basesize.z) {
     // base case
     base(v0, v1, Am, lda);
   }
   else {
-    // divide long dimension
-    char dim;
-    if (cx >= cy*4 && cx >= cz*4 && csize.x > g.basesize.x) dim = 'X';
-    else if (cy >= cz && csize.y > g.basesize.y) dim = 'Y';
-    else if (csize.z > g.basesize.z) dim = 'Z';
-    else if (csize.y > g.basesize.y) dim = 'Y';
-    else dim = 'X';
+    // general case
+    long len = cx;
+    if (!ondiag) {
+      if (cy > len) len = cy;
+      if (cz > len) len = cz;
+    }
+    long chunklen = g.basesize.x;
+    while (chunklen*2 < len) {
+      chunklen *= 2;
+    }
+    assert(chunklen > 0);
 
-    long mid = (v0.get(dim) + v1.get(dim))/2;
-    long align = g.basesize.get(dim); //
-    mid = ((mid+align-1)/align)*align;
+    // divide the task into 8
+    long x0 = v0.x;
+    long x1 = v1.x;
+    long y0 = v0.y;
+    long y1 = v1.y;
+    long z0 = v0.z;
+    long z1 = v1.z;
 
-    // first task
-    recMM(inbuf, v0, vec3mod(v1, dim, mid),
+    long xm = x0+chunklen;
+    if (xm > x1) xm = x1;
+    long ym = y0+chunklen;
+    if (ym > y1) ym = y1;
+    long zm = z0+chunklen;
+    if (zm > z1) zm = z1;
+
+    // 1
+    recalgo(ondiag, inbuf, vec3(x0, y0, z0), vec3(xm, ym, zm),
 	    Am, lda);
-    // second task
-    recMM(inbuf, vec3mod(v0, dim, mid), v1,
+    // 2
+    if (xm < x1) 
+      recalgo(false, inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm),
+	      Am, lda);
+    // 3
+    if (ym < y1)
+      recalgo(false, inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm),
+	      Am, lda);
+    // 4
+    if (xm < x1 && ym < y1) 
+      recalgo(false, inbuf, vec3(xm, ym, z0), vec3(x1, y1, zm),
 	    Am, lda);
+
+    if (zm < z1) {
+      // 5
+      if (xm < x1 && ym < y1) 
+	recalgo(ondiag, inbuf, vec3(xm, ym, zm), vec3(x1, y1, z1),
+		Am, lda);
+      // 6
+      if (ym < y1)
+	recalgo(false, inbuf, vec3(x0, ym, zm), vec3(xm, y1, z1),
+		Am, lda);
+      // 7
+      if (xm < x1) 
+	recalgo(false, inbuf, vec3(xm, y0, zm), vec3(x1, ym, z1),
+		Am, lda);
+      // 8
+      recalgo(false, inbuf, vec3(x0, y0, zm), vec3(xm, ym, z1),
+	      Am, lda);
+    }
   }
 
   return 0;
 }
+
 
 
 int algo(long n, REAL *Am, long lda)
@@ -313,7 +293,7 @@ int algo(long n, REAL *Am, long lda)
 #if 1 /////////////
   // Recursive algorithm
 
-  recAPSP(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+  recalgo(true, false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
 
 #elif 0 ///////////
 #warning base slow algorithm for debug
@@ -340,10 +320,8 @@ int algo(long n, REAL *Am, long lda)
 
 #endif
 
-  printf("[matmul:algo] pivot kernel: %.3lf sec, %ld times\n",
+  printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
 	 kernel1time, kernel1count);
-  printf("[matmul:algo] nonpivot kernel: %.3lf sec, %ld times\n",
-	 kernel2time, kernel2count);
 
   return 0;
 }
