@@ -53,11 +53,11 @@ int rand_mat(long n, REAL *A)
       A[i+j*n] = v;
     }
   }
-  printf("%d connections\n", concount);
 
   et = Wtime();
 #if VERBOSE >= 10
   printf("[rand_mat] making a random mat took %.3lfsec\n", et-st);
+  printf("[rand_mat] %d connections made\n", concount);
 #endif
   return 0;
 }

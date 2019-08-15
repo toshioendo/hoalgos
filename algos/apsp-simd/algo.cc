@@ -44,10 +44,8 @@ int init_algo()
   use_omptask = 'Y';
 #endif
 
-  g.ndiv = 8;
+  g.basesize = basesize_float_simd();
 
-  //g.basesize = basesize_float_simd();
-  g.basesize = vec3(16, 16, 16);
   printf("[matmul:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
 	 use_avx2, use_avx512, use_omp, use_omptask);
   printf("[matmul:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
@@ -145,13 +143,21 @@ int base(vec3 v0, vec3 v1, REAL *Am, long lda)
   st = Wtime();
 
   if (v0.x == v0.z || v0.y == v0.z) {
+#if 1
+    base_pivot_float_simd(v0, v1, Am, lda);
+#else
     base_pivot_cpuloop(v0, v1, Am, lda);
+#endif
     et = Wtime();
     kernel1time += (et-st);
     kernel1count++;
   }
   else {
+#if 1
+    base_nonpivot_float_simd(v0, v1, Am, lda);
+#else
     base_nonpivot_cpuloop(v0, v1, Am, lda);
+#endif
     et = Wtime();
     kernel2time += (et-st);
     kernel2count++;

@@ -8,8 +8,7 @@ CFLAGS += -DUSE_AVX512
 LDFLAGS = -lm -fopenmp
 
 LIBS =
-OBJS = apsp.o algo.o 
-# kernel-avx512.o
+OBJS = apsp.o algo.o  kernel-avx512.o
 HDRS = 
 
 APP = apsp

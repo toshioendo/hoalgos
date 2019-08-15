@@ -36,8 +36,12 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 #include "vec3.h"
 
 int init_algo();
-//vec3 basesize_double_simd();
-//int base_double_simd(vec3 v0, vec3 v1, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc);
+vec3 basesize_float_simd();
+int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
+
+#define base_pivot_float_simd base_gen_float_simd
+#define base_nonpivot_float_simd base_gen_float_simd
+
 int algo(long n, REAL *Am, long lda);
 
 
