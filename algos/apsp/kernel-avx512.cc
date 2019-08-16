@@ -23,31 +23,39 @@ vec3 basesize_float_simd()
 #ifdef USE_PACK_MAT
 long base_float_pack_gen(long m, long n, REAL *A, long lda, REAL *buf)
 {
-  assert(m % 16 == 0 && n % 4 == 0);
+  assert(m % 16 == 0);
   REAL *Ap = A;
-#if 0
   for (long j = 0; j < n; j++) {
     for (long i = 0; i < m; i+=16) {
       _mm512_storeu_ps(&buf[i+j*m], _mm512_loadu_ps(&A[i+j*lda]));
     }
   }
-#else
-  for (long j = 0; j < n; j += 4) {
-    for (long i = 0; i < m; i+= 16) {
-      _mm512_storeu_ps(&buf[i+(j+0)*m], _mm512_loadu_ps(&A[i+(j+0)*lda]));
-      _mm512_storeu_ps(&buf[i+(j+1)*m], _mm512_loadu_ps(&A[i+(j+1)*lda]));
-      _mm512_storeu_ps(&buf[i+(j+2)*m], _mm512_loadu_ps(&A[i+(j+2)*lda]));
-      _mm512_storeu_ps(&buf[i+(j+3)*m], _mm512_loadu_ps(&A[i+(j+3)*lda]));
-    }
-  }
-#endif
 
   return m*n;
 }
 
 long base_float_packA(REAL *A, long lda, REAL *buf)
 {
-  return base_float_pack_gen(g.basesize.x, g.basesize.z, A, lda, buf);
+  return base_float_pack_gen(g.basesize.x, g.basesize.y, A, lda, buf);
+}
+
+
+long base_float_unpack_gen(long m, long n, REAL *A, long lda, REAL *buf)
+{
+  assert(m % 16 == 0);
+  REAL *Ap = A;
+  for (long j = 0; j < n; j++) {
+    for (long i = 0; i < m; i+= 16) {
+      _mm512_storeu_ps(&A[i+j*lda], _mm512_loadu_ps(&buf[i+j*m]));
+    }
+  }
+
+  return m*n;
+}
+
+long base_float_unpackA(REAL *A, long lda, REAL *buf)
+{
+  return base_float_unpack_gen(g.basesize.x, g.basesize.y, A, lda, buf);
 }
 
 
@@ -82,9 +90,9 @@ int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 #endif
   const long bs = lda*lda;
 
-  REAL *A = &g.Abuf[(ib+lb*g.mb)*bs + (ii+ll*lda)];
-  REAL *B = &g.Abuf[(lb+jb*g.kb)*bs + (ll+jj*lda)];
-  REAL *C = &g.Abuf[(ib+jb*g.mb)*bs + (ii+jj*lda)];
+  REAL *A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
+  REAL *B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
+  REAL *C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
 #else
   const long ldb = lda;
   const long ldc = lda;

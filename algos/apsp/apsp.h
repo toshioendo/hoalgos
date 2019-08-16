@@ -27,7 +27,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-//#define USE_PACK_MAT
+#define USE_PACK_MAT
 
 #define USE_COALESCED_KERNEL
 
@@ -51,10 +51,8 @@ int algo(long n, REAL *Am, long lda);
 
 
 #ifdef USE_PACK_MAT
-long base_double_packA(REAL *A, long lda, REAL *buf);
-long base_double_packB(REAL *B, long ldb, REAL *buf);
-long base_double_packC(REAL *C, long ldc, REAL *buf);
-long base_double_unpackC(REAL *C, long ldc, REAL *buf);
+long base_float_packA(REAL *A, long lda, REAL *buf);
+long base_float_unpackA(REAL *A, long lda, REAL *buf);
 #endif
 
 

@@ -94,13 +94,13 @@ int main(int argc, char *argv[])
 
     et = Wtime();
 
-    printf("%.3lf sec -> %lf MFlops\n",
-	   (et-st), nops/(et-st)/1000000.0);
-
 #if 1
     printf("A[0] = %lf, A[%ld] = %lf\n", 
 	   A[0], n*n-1, A[n*n-1]);
 #endif
+
+    printf("%.3lf sec -> %lf MFlops\n\n",
+	   (et-st), nops/(et-st)/1000000.0);
 
   }
 

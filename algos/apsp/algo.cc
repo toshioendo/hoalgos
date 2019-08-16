@@ -286,7 +286,7 @@ int pack_mats(long n,  REAL *Am, long lda)
   g.Abuf = p;
   for (j = 0; j < nup; j += g.basesize.y) {
     for (i = 0; i < nup; i += g.basesize.x) {
-      s = base_double_packA(&Am[i+j*lda], lda, p);
+      s = base_float_packA(&Am[i+j*lda], lda, p);
       p += s;
     }
   }
@@ -297,7 +297,7 @@ int pack_mats(long n,  REAL *Am, long lda)
   return 0;
 }
 
-int unpack_mats(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
+int unpack_mats(long n, REAL *Am, long lda)
 {
   double st = Wtime();
   long nup = roundup(n, g.basesize.x);
@@ -306,8 +306,8 @@ int unpack_mats(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, 
   long s;
   REAL *p = g.Abuf;
   for (j = 0; j < nup; j += g.basesize.y) {
-    for (i = 0; i < mup; i += g.basesize.x) {
-      s = base_double_unpackA(&Am[i+j*lda], lda, p);
+    for (i = 0; i < nup; i += g.basesize.x) {
+      s = base_float_unpackA(&Am[i+j*lda], lda, p);
       p += s;
     }
   }
@@ -338,10 +338,19 @@ int algo(long n, REAL *Am, long lda)
   kernel1count = 0;
   kernel2count = 0;
 
+
 #if 1 /////////////
   // Recursive algorithm
 
+#ifdef USE_PACK_MAT
+  pack_mats(n, Am, lda);
+#endif
+
   recalgo(true, false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+
+#ifdef USE_PACK_MAT
+  unpack_mats(n, Am, lda);
+#endif
 
 #elif 0 ///////////
 #warning base slow algorithm for debug
@@ -370,6 +379,8 @@ int algo(long n, REAL *Am, long lda)
 
   printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
 	 kernel1time, kernel1count);
+  printf("[APSP:algo] copy: %.3lf sec\n",
+	 copytime);
 
   return 0;
 }
