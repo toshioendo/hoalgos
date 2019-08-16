@@ -31,6 +31,8 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 #define USE_COALESCED_KERNEL
 
+//#define MEAS_KERNEL
+
 #define VERBOSE 10
 
 #include "vec3.h"
@@ -72,8 +74,8 @@ static double Wtime()
 #define isaligned(i, align) (((size_t)(i) % (size_t)(align)) == 0)
 
 struct global {
-  long ndiv;
   vec3 basesize; // preferable base case size
+  long task_thre;
 
   long bufsize; // size in words
   REAL *buf;

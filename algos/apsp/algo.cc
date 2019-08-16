@@ -46,16 +46,29 @@ int init_algo()
 
   g.basesize = basesize_float_simd();
 
-  printf("[matmul:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
+  g.task_thre = 512;
+  char *envstr;
+  envstr = getenv("TASK_THRE");
+  if (envstr != NULL) {
+    g.task_thre = atol(envstr);
+    if (g.task_thre < 16) {
+      printf("TASK_THRE(%ld) must be >=16 (such as 512)\n", g.task_thre);
+      exit(1);
+    }
+  }
+  
+
+  printf("[apsp:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
 	 use_avx2, use_avx512, use_omp, use_omptask);
-  printf("[matmul:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
+  printf("[apsp:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
+  printf("[apsp:init_algo] TASK_THRE=%ld\n", g.task_thre);
 
   // for internal copy buffer
   g.bufsize = 128*1024*1024;
   g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
 
-  printf("[matmul] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
+  printf("[apsp:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
 
   return 0;
 }
@@ -132,15 +145,15 @@ int base_nonpivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
 
 inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 {
-
-  double st, et;
   // base case
 #if VERBOSE >= 20
   printf("[base] START [(%ld,%ld,%ld), (%ld,%ld,%ld))\n", 
 	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
 #endif
 
-  st = Wtime();
+#ifdef MEAS_KERNEL
+  double st = Wtime();
+#endif
 
   if (v0.x == v0.z || v0.y == v0.z) {
 #if 1
@@ -157,21 +170,24 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #endif
   }
 
-  et = Wtime();
+#ifdef MEAS_KERNEL
+  double et = Wtime();
   kernel1time += (et-st);
   kernel1count++;
+#endif
 
   // print periodically
-#if VERBOSE >= 10
+#if defined (MEAS_KERNEL) && VERBOSE >= 10
 #if VERBOSE >= 30
   if (1)
 #else
   if (et > logtime+1.0)
 #endif
     {
-      printf("[base] END [(%ld,%ld,%ld), (%ld,%ld,%ld)) -> %.6lfsec\n", 
-	     v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, et-st);
+      double t = et-st;
       logtime = et;
+      printf("[base] END [(%ld,%ld,%ld), (%ld,%ld,%ld)) -> %.6lfsec\n", 
+	     v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, t);
     }
 #endif
 
@@ -235,12 +251,15 @@ int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 	    Am, lda);
     // 2
     if (xm < x1) 
-      recalgo(false, inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm),
-	      Am, lda);
+#pragma omp task if(chunklen >= g.task_thre)
+      recalgo(false, inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
     // 3
     if (ym < y1)
-      recalgo(false, inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm),
-	      Am, lda);
+#pragma omp task if(chunklen >= g.task_thre)
+      recalgo(false, inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
+
+#pragma omp taskwait
+
     // 4
     if (xm < x1 && ym < y1) 
       recalgo(false, inbuf, vec3(xm, ym, z0), vec3(x1, y1, zm),
@@ -253,12 +272,17 @@ int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 		Am, lda);
       // 6
       if (ym < y1)
+#pragma omp task if(chunklen >= g.task_thre)
 	recalgo(false, inbuf, vec3(x0, ym, zm), vec3(xm, y1, z1),
 		Am, lda);
       // 7
       if (xm < x1) 
+#pragma omp task if(chunklen >= g.task_thre)
 	recalgo(false, inbuf, vec3(xm, y0, zm), vec3(x1, ym, z1),
 		Am, lda);
+
+#pragma omp taskwait
+
       // 8
       recalgo(false, inbuf, vec3(x0, y0, zm), vec3(xm, ym, z1),
 	      Am, lda);
@@ -346,6 +370,10 @@ int algo(long n, REAL *Am, long lda)
   pack_mats(n, Am, lda);
 #endif
 
+#ifdef USE_OMPTASK
+#pragma omp parallel
+#pragma omp single
+#endif // USE_OMPTASK
   recalgo(true, false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
 
 #ifdef USE_PACK_MAT
@@ -377,8 +405,10 @@ int algo(long n, REAL *Am, long lda)
 
 #endif
 
+#ifdef MEAS_KERNEL
   printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
 	 kernel1time, kernel1count);
+#endif
   printf("[APSP:algo] copy: %.3lf sec\n",
 	 copytime);
 
