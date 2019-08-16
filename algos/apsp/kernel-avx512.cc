@@ -9,15 +9,49 @@
 #include <homm.h>
 #include "apsp.h"
 
+#ifdef USE_COALESCED_KERNEL
+#define BLOCK_MAG 2
+#else
+#define BLOCK_MAG 1
+#endif
 
 vec3 basesize_float_simd()
 {
-#ifdef USE_COALESCED_KERNEL
-  return vec3(16*2, 16*2, 16*2);
-#else
-  return vec3(16, 16, 16);
-#endif
+  return vec3(16*BLOCK_MAG, 16*BLOCK_MAG, 16*BLOCK_MAG);
 }
+
+#ifdef USE_PACK_MAT
+long base_float_pack_gen(long m, long n, REAL *A, long lda, REAL *buf)
+{
+  assert(m % 16 == 0 && n % 4 == 0);
+  REAL *Ap = A;
+#if 0
+  for (long j = 0; j < n; j++) {
+    for (long i = 0; i < m; i+=16) {
+      _mm512_storeu_ps(&buf[i+j*m], _mm512_loadu_ps(&A[i+j*lda]));
+    }
+  }
+#else
+  for (long j = 0; j < n; j += 4) {
+    for (long i = 0; i < m; i+= 16) {
+      _mm512_storeu_ps(&buf[i+(j+0)*m], _mm512_loadu_ps(&A[i+(j+0)*lda]));
+      _mm512_storeu_ps(&buf[i+(j+1)*m], _mm512_loadu_ps(&A[i+(j+1)*lda]));
+      _mm512_storeu_ps(&buf[i+(j+2)*m], _mm512_loadu_ps(&A[i+(j+2)*lda]));
+      _mm512_storeu_ps(&buf[i+(j+3)*m], _mm512_loadu_ps(&A[i+(j+3)*lda]));
+    }
+  }
+#endif
+
+  return m*n;
+}
+
+long base_float_packA(REAL *A, long lda, REAL *buf)
+{
+  return base_float_pack_gen(g.basesize.x, g.basesize.z, A, lda, buf);
+}
+
+
+#endif
 
 // This kernel can be used both for pivot computation and nonpivot computation
 // since L-loop is outermost
@@ -28,12 +62,35 @@ int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   const long k = v1.z-v0.z;
   // designed for 16x16x(mul of 4)
 
-#if 1
+#ifdef USE_PACK_MAT
+  // overwrite lda, ldb, ldc
+  lda = 16*BLOCK_MAG;
+  const long ldb = 16*BLOCK_MAG;
+  const long ldc = 16*BLOCK_MAG;
+
+  // block idx
+  long ib = v0.x/lda;
+  long jb = v0.y/lda;
+  long lb = v0.z/lda;
+
+  // index in a block (nonzero with USE_COALESCED_KERNEL
+  long ii = v0.x % lda;
+  long jj = v0.y % lda;
+  long ll = v0.z % lda;
+#ifndef USE_COALESCED_KERNEL
+  assert(ii == 0 && jj == 0 && ll == 0);
+#endif
+  const long bs = lda*lda;
+
+  REAL *A = &g.Abuf[(ib+lb*g.mb)*bs + (ii+ll*lda)];
+  REAL *B = &g.Abuf[(lb+jb*g.kb)*bs + (ll+jj*lda)];
+  REAL *C = &g.Abuf[(ib+jb*g.mb)*bs + (ii+jj*lda)];
+#else
   const long ldb = lda;
   const long ldc = lda;
   REAL *A = &Am[v0.x + v0.z * lda];
-  REAL *B = &Am[v0.z + v0.y * ldb];
-  REAL *C = &Am[v0.x + v0.y * ldc];
+  REAL *B = &Am[v0.z + v0.y * lda];
+  REAL *C = &Am[v0.x + v0.y * lda];
 #endif
 
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;

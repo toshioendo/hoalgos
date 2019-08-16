@@ -269,6 +269,54 @@ int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 }
 
 
+#ifdef USE_PACK_MAT
+int pack_mats(long n,  REAL *Am, long lda)
+{
+  double st = Wtime();
+  long nup = roundup(n, g.basesize.x);
+  if (nup*nup >= g.bufsize) {
+    printf("(%d) is too large. to be fixed\n", n);
+  }
+
+  g.nb = nup/g.basesize.x;
+
+  long i, j;
+  long s;
+  REAL *p = g.buf;
+  g.Abuf = p;
+  for (j = 0; j < nup; j += g.basesize.y) {
+    for (i = 0; i < nup; i += g.basesize.x) {
+      s = base_double_packA(&Am[i+j*lda], lda, p);
+      p += s;
+    }
+  }
+
+  double et = Wtime();
+  copytime += (et-st);
+
+  return 0;
+}
+
+int unpack_mats(long m, long n, long k, REAL *Am, long lda, REAL *Bm, long ldb, REAL *Cm, long ldc)
+{
+  double st = Wtime();
+  long nup = roundup(n, g.basesize.x);
+
+  long i, j;
+  long s;
+  REAL *p = g.Abuf;
+  for (j = 0; j < nup; j += g.basesize.y) {
+    for (i = 0; i < mup; i += g.basesize.x) {
+      s = base_double_unpackA(&Am[i+j*lda], lda, p);
+      p += s;
+    }
+  }
+
+  double et = Wtime();
+  copytime += (et-st);
+  return 0;
+}
+#endif
 
 int algo(long n, REAL *Am, long lda)
 {
