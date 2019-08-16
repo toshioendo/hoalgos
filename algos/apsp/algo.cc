@@ -63,9 +63,12 @@ int init_algo()
   printf("[apsp:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
   printf("[apsp:init_algo] TASK_THRE=%ld\n", g.task_thre);
+#ifdef USE_OMP
+  printf("[apsp:init_algo] #threads=%d\n", omp_get_max_threads());
+#endif
 
   // for internal copy buffer
-  g.bufsize = 128*1024*1024;
+  g.bufsize = 768*1024*1024;
   g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
 
   printf("[apsp:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
@@ -315,21 +318,30 @@ int pack_mats(long n,  REAL *Am, long lda)
   double st = Wtime();
   long nup = roundup(n, g.basesize.x);
   if (nup*nup >= g.bufsize) {
-    printf("(%d) is too large. to be fixed\n", n);
+    printf("[pack_mats] n=%d is too large to buffer. to be fixed\n", n);
+    exit(1);
   }
 
   g.nb = nup/g.basesize.x;
 
-  long i, j;
-  long s;
+  long blocklen = g.basesize.x*g.basesize.y; // in words
   REAL *p = g.buf;
   g.Abuf = p;
-  for (j = 0; j < nup; j += g.basesize.y) {
-    for (i = 0; i < nup; i += g.basesize.x) {
-      s = base_float_packA(&Am[i+j*lda], lda, p);
-      p += s;
+
+  long jb;
+#if 1 && defined USE_OMP
+#pragma omp parallel for
+#endif
+  for (jb = 0; jb < g.nb; jb ++) {
+    long ib;
+    long j = jb*g.basesize.y;
+    for (ib = 0; ib < g.nb; ib ++) {
+      long i = ib*g.basesize.x;
+
+      base_float_packA(&Am[i+j*lda], lda, &g.Abuf[(ib+jb*g.nb)*blocklen]);
     }
   }
+  p += g.nb*g.nb*blocklen;
 
   double et = Wtime();
   copytime += (et-st);
@@ -342,15 +354,22 @@ int unpack_mats(long n, REAL *Am, long lda)
   double st = Wtime();
   long nup = roundup(n, g.basesize.x);
 
-  long i, j;
-  long s;
+  long blocklen = g.basesize.x*g.basesize.y; // in words
   REAL *p = g.Abuf;
-  for (j = 0; j < nup; j += g.basesize.y) {
-    for (i = 0; i < nup; i += g.basesize.x) {
-      s = base_float_unpackA(&Am[i+j*lda], lda, p);
-      p += s;
+  long jb;
+#if 1 && defined USE_OMP
+#pragma omp parallel for
+#endif
+  for (jb = 0; jb < g.nb; jb ++) {
+    long ib;
+    long j = jb*g.basesize.y;
+    for (ib = 0; ib < g.nb; ib ++) {
+      long i = ib*g.basesize.x;
+
+      base_float_unpackA(&Am[i+j*lda], lda, &g.Abuf[(ib+jb*g.nb)*blocklen]);
     }
   }
+  p += g.nb*g.nb*blocklen;
 
   double et = Wtime();
   copytime += (et-st);
