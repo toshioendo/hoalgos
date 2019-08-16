@@ -218,6 +218,8 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
   }
   else {
     // general case
+    bool onpivot = (v0.x == v0.z || v0.y == v0.z);
+
     long len = cx;
     if (cy > len) len = cy;
     if (cz > len) len = cz;
@@ -242,46 +244,64 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
     long zm = z0+chunklen;
     if (zm > z1) zm = z1;
 
+    bool small = (chunklen < g.task_thre);
+
     // 1
+#pragma omp task if(!small && !onpivot)
     recalgo(inbuf, vec3(x0, y0, z0), vec3(xm, ym, zm),
 	    Am, lda);
     // 2
     if (xm < x1) 
-#pragma omp task if(chunklen >= g.task_thre)
+#pragma omp task if(!small)
       recalgo(inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
     // 3
     if (ym < y1)
-#pragma omp task if(chunklen >= g.task_thre)
+#pragma omp task if(!small)
       recalgo(inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
 
+    if (!small && onpivot) {
 #pragma omp taskwait
+    }
 
     // 4
     if (xm < x1 && ym < y1) 
+#pragma omp task if(!small && !onpivot)
       recalgo(inbuf, vec3(xm, ym, z0), vec3(x1, y1, zm),
 	    Am, lda);
+
+    if (!small) {
+#pragma omp taskwait
+    }
 
     if (zm < z1) {
       // 5
       if (xm < x1 && ym < y1) 
+#pragma omp task if(!small && !onpivot)
 	recalgo(inbuf, vec3(xm, ym, zm), vec3(x1, y1, z1),
 		Am, lda);
       // 6
       if (ym < y1)
-#pragma omp task if(chunklen >= g.task_thre)
+#pragma omp task if(!small)
 	recalgo(inbuf, vec3(x0, ym, zm), vec3(xm, y1, z1),
 		Am, lda);
       // 7
       if (xm < x1) 
-#pragma omp task if(chunklen >= g.task_thre)
+#pragma omp task if(!small)
 	recalgo(inbuf, vec3(xm, y0, zm), vec3(x1, ym, z1),
 		Am, lda);
 
+      if (!small && onpivot) {
 #pragma omp taskwait
+      }
 
       // 8
+#pragma omp task if(!small && !onpivot)
       recalgo(inbuf, vec3(x0, y0, zm), vec3(xm, ym, z1),
 	      Am, lda);
+
+      if (!small) {
+#pragma omp taskwait
+      }
     }
   }
 
