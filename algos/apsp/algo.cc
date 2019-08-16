@@ -11,6 +11,10 @@
 #include <homm.h>
 #include "apsp.h"
 
+#ifdef USE_OMP
+#include <omp.h>
+#endif
+
 // global variables
 struct global g;
 
@@ -39,10 +43,6 @@ int init_algo()
 #ifdef USE_OMP
   use_omp = 'Y';
 #endif
-  char use_omptask = 'N';
-#ifdef USE_OMPTASK
-  use_omptask = 'Y';
-#endif
 
   g.basesize = basesize_float_simd();
 
@@ -58,8 +58,8 @@ int init_algo()
   }
   
 
-  printf("[apsp:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c, USE_OMPTASK %c\n",
-	 use_avx2, use_avx512, use_omp, use_omptask);
+  printf("[apsp:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c\n",
+	 use_avx2, use_avx512, use_omp);
   printf("[apsp:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
   printf("[apsp:init_algo] TASK_THRE=%ld\n", g.task_thre);
@@ -89,9 +89,6 @@ int base_pivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
   // in pivot cases, two or all of A, B, C are overlapped.
   // L loop must be outermost
   for (long l = 0; l < k; l++) {
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
     for (long j = 0; j < n; j++) {
       REAL Blj = B[l+j*lda];
 #pragma unroll
@@ -122,9 +119,6 @@ int base_nonpivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
   REAL *B = &Am[v0.z + v0.y * lda];
   REAL *C = &Am[v0.x + v0.y * lda];
 
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
   for (long j = 0; j < n; j++) {
     for (long l = 0; l < k; l++) {
       REAL Blj = B[l+j*lda];
@@ -151,9 +145,13 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
 #endif
 
-#ifdef MEAS_KERNEL
-  double st = Wtime();
+  bool meas_kernel = true;
+#ifdef USE_OMP
+  if (omp_get_thread_num() != 0) meas_kernel = false;
 #endif
+
+  double st = 0.0;
+  if (meas_kernel) st = Wtime();
 
   if (v0.x == v0.z || v0.y == v0.z) {
 #if 1
@@ -170,18 +168,19 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #endif
   }
 
-#ifdef MEAS_KERNEL
-  double et = Wtime();
-  kernel1time += (et-st);
-  kernel1count++;
-#endif
+  double et = 0.0;
+  if (meas_kernel) {
+    et = Wtime();
+    kernel1time += (et-st);
+    kernel1count++;
+  }
 
   // print periodically
-#if defined (MEAS_KERNEL) && VERBOSE >= 10
+#if VERBOSE >= 10
 #if VERBOSE >= 30
-  if (1)
+  if (meas_kernel)
 #else
-  if (et > logtime+1.0)
+  if (meas_kernel && et > logtime+1.0)
 #endif
     {
       double t = et-st;
@@ -191,12 +190,11 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
     }
 #endif
 
+
   return 0;
 }
 
-int recMM(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda);
-
-int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
+int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 {
 #if VERBOSE >= 30
   printf("[recAPSP] [(%d,%d,%d), (%d,%d,%d))\n",
@@ -221,10 +219,8 @@ int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
   else {
     // general case
     long len = cx;
-    if (!ondiag) {
-      if (cy > len) len = cy;
-      if (cz > len) len = cz;
-    }
+    if (cy > len) len = cy;
+    if (cz > len) len = cz;
     long chunklen = g.basesize.x;
     while (chunklen*2 < len) {
       chunklen *= 2;
@@ -247,44 +243,44 @@ int recalgo(bool ondiag, bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
     if (zm > z1) zm = z1;
 
     // 1
-    recalgo(ondiag, inbuf, vec3(x0, y0, z0), vec3(xm, ym, zm),
+    recalgo(inbuf, vec3(x0, y0, z0), vec3(xm, ym, zm),
 	    Am, lda);
     // 2
     if (xm < x1) 
 #pragma omp task if(chunklen >= g.task_thre)
-      recalgo(false, inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
+      recalgo(inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
     // 3
     if (ym < y1)
 #pragma omp task if(chunklen >= g.task_thre)
-      recalgo(false, inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
+      recalgo(inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
 
 #pragma omp taskwait
 
     // 4
     if (xm < x1 && ym < y1) 
-      recalgo(false, inbuf, vec3(xm, ym, z0), vec3(x1, y1, zm),
+      recalgo(inbuf, vec3(xm, ym, z0), vec3(x1, y1, zm),
 	    Am, lda);
 
     if (zm < z1) {
       // 5
       if (xm < x1 && ym < y1) 
-	recalgo(ondiag, inbuf, vec3(xm, ym, zm), vec3(x1, y1, z1),
+	recalgo(inbuf, vec3(xm, ym, zm), vec3(x1, y1, z1),
 		Am, lda);
       // 6
       if (ym < y1)
 #pragma omp task if(chunklen >= g.task_thre)
-	recalgo(false, inbuf, vec3(x0, ym, zm), vec3(xm, y1, z1),
+	recalgo(inbuf, vec3(x0, ym, zm), vec3(xm, y1, z1),
 		Am, lda);
       // 7
       if (xm < x1) 
 #pragma omp task if(chunklen >= g.task_thre)
-	recalgo(false, inbuf, vec3(xm, y0, zm), vec3(x1, ym, z1),
+	recalgo(inbuf, vec3(xm, y0, zm), vec3(x1, ym, z1),
 		Am, lda);
 
 #pragma omp taskwait
 
       // 8
-      recalgo(false, inbuf, vec3(x0, y0, zm), vec3(xm, ym, z1),
+      recalgo(inbuf, vec3(x0, y0, zm), vec3(xm, ym, z1),
 	      Am, lda);
     }
   }
@@ -370,11 +366,11 @@ int algo(long n, REAL *Am, long lda)
   pack_mats(n, Am, lda);
 #endif
 
-#ifdef USE_OMPTASK
+#ifdef USE_OMP
 #pragma omp parallel
 #pragma omp single
-#endif // USE_OMPTASK
-  recalgo(true, false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+#endif // USE_OMP
+  recalgo(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
 
 #ifdef USE_PACK_MAT
   unpack_mats(n, Am, lda);
@@ -405,10 +401,8 @@ int algo(long n, REAL *Am, long lda)
 
 #endif
 
-#ifdef MEAS_KERNEL
   printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
 	 kernel1time, kernel1count);
-#endif
   printf("[APSP:algo] copy: %.3lf sec\n",
 	 copytime);
 

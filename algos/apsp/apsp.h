@@ -31,8 +31,6 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 #define USE_COALESCED_KERNEL
 
-//#define MEAS_KERNEL
-
 #define VERBOSE 10
 
 #include "vec3.h"
