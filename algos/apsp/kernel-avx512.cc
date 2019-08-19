@@ -321,21 +321,16 @@ int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   base_s_pivot_float_simd(vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
   // 3
   base_s_pivot_float_simd(vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
-#if 1
-  // 4 & 5
-  base_s_nonpivot_float_simd(vec3(xm, ym, z0), vec3(x1, y1, z1), Am, lda);
-#else
   // 4
   base_s_nonpivot_float_simd(vec3(xm, ym, z0), vec3(x1, y1, zm), Am, lda);
   // 5
-  base_s_nonpivot_float_simd(vec3(xm, ym, zm), vec3(x1, y1, z1), Am, lda);
-#endif
+  base_s_pivot_float_simd(vec3(xm, ym, zm), vec3(x1, y1, z1), Am, lda);
   // 6
   base_s_pivot_float_simd(vec3(x0, ym, zm), vec3(xm, y1, z1), Am, lda);
   // 7
   base_s_pivot_float_simd(vec3(xm, y0, zm), vec3(x1, ym, z1), Am, lda);
   // 8
-  base_s_pivot_float_simd(vec3(x0, y0, zm), vec3(xm, ym, z1), Am, lda);
+  base_s_nonpivot_float_simd(vec3(x0, y0, zm), vec3(xm, ym, z1), Am, lda);
   return 0;
 }
 
