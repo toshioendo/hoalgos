@@ -43,8 +43,8 @@ int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
 int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
 int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
 #else
-#define base_pivot_float_simd base_gen_float_simd
-#define base_nonpivot_float_simd base_gen_float_simd
+#define base_pivot_float_simd base_s_pivot_float_simd
+#define base_nonpivot_float_simd base_s_nonpivot_float_simd
 #endif
 
 int algo(long n, REAL *Am, long lda);
