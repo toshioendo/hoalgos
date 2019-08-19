@@ -67,9 +67,14 @@ int init_algo()
   printf("[apsp:init_algo] #threads=%d\n", omp_get_max_threads());
 #endif
 
+#if 1
+  g.bufsize = 0L;
+  g.buf = NULL;
+#else
   // for internal copy buffer
-  g.bufsize = 768*1024*1024;
+  g.bufsize = 4L*1024*1024*1024;
   g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
+#endif
 
   printf("[apsp:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
 
@@ -183,7 +188,7 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #if VERBOSE >= 30
   if (meas_kernel)
 #else
-  if (meas_kernel && et > logtime+1.0)
+  if (meas_kernel && et > logtime+2.0)
 #endif
     {
       double t = et-st;
@@ -317,7 +322,7 @@ int pack_mats(long n,  REAL *Am, long lda)
 {
   double st = Wtime();
   long nup = roundup(n, g.basesize.x);
-  if (nup*nup >= g.bufsize) {
+  if (nup*nup > g.bufsize) {
     printf("[pack_mats] n=%d is too large to buffer. to be fixed\n", n);
     exit(1);
   }
@@ -402,6 +407,13 @@ int algo(long n, REAL *Am, long lda)
   // Recursive algorithm
 
 #ifdef USE_PACK_MAT
+
+  if (n*n > g.bufsize) {
+    // allocate internal copy buffer eagerly
+    g.bufsize = n*n;
+    g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
+  }
+
   pack_mats(n, Am, lda);
 #endif
 

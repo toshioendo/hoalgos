@@ -38,7 +38,9 @@ int rand_mat(long n, REAL *A)
   const REAL infval = 1.0e+8;
   const int percent = 10;
   long concount = 0;
-  //#pragma omp parallel for
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
   for (j = 0; j < n; j++) {
     long i;
     unsigned int seed = j;
@@ -56,8 +58,10 @@ int rand_mat(long n, REAL *A)
 
   et = Wtime();
 #if VERBOSE >= 10
+  printf("[rand_mat] matrix of size %ld, address [%p,%p) initialized\n",
+	 n, A, A+n*n);
   printf("[rand_mat] making a random mat took %.3lfsec\n", et-st);
-  printf("[rand_mat] %d connections made\n", concount);
+  printf("[rand_mat] %ld connections out of %ld made\n", concount, n*n);
 #endif
   return 0;
 }

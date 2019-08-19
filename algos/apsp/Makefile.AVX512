@@ -3,7 +3,9 @@ CXX = g++
 LD = $(CXX)
 
 CFLAGS = -O3 -g -I../../include -fopenmp -march=native
-# -O3
+#-mavx512f
+#
+
 CFLAGS += -DUSE_AVX512 -DUSE_OMP
 LDFLAGS = -lm -fopenmp
 
