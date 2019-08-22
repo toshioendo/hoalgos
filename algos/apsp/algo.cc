@@ -280,7 +280,6 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
       }
     }
     else if (onpivot) {
-      assert(xm < x1 && ym < y1 && zm < z1);
       // 0
       recalgo(inbuf, v0s[0], v1s[0], Am, lda);
       // 1
@@ -295,18 +294,20 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
       // 3
       recalgo(inbuf, v0s[3], v1s[3], Am, lda);
 
-      // 4
-      recalgo(inbuf, v0s[4], v1s[4], Am, lda);
-      // 5
+      if (zm < z1) {
+	// 4
+	recalgo(inbuf, v0s[4], v1s[4], Am, lda);
+	// 5
 #pragma omp task
-      recalgo(inbuf, v0s[5], v1s[5], Am, lda);
-      // 6
+	recalgo(inbuf, v0s[5], v1s[5], Am, lda);
+	// 6
 #pragma omp task
-      recalgo(inbuf, v0s[6], v1s[6], Am, lda);
-
+	recalgo(inbuf, v0s[6], v1s[6], Am, lda);
+	
 #pragma omp taskwait
-      // 7
-      recalgo(inbuf, v0s[7], v1s[7], Am, lda);
+	// 7
+	recalgo(inbuf, v0s[7], v1s[7], Am, lda);
+      }
     }
     else {
       // nonpivot
