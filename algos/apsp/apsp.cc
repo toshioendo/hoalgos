@@ -47,7 +47,10 @@ int rand_mat(long n, REAL *A)
     srand(j);
     for (i = 0; i < n; i++) {
       REAL v;
-      if (rand_r(&seed) % 100 < percent) {
+      if (i == j) {
+	v = 0.0;
+      }
+      else if (rand_r(&seed) % 100 < percent) {
 	v = 1.0;
 	concount++;
       }
@@ -66,6 +69,37 @@ int rand_mat(long n, REAL *A)
   return 0;
 }
 
+int summary_mat(long n, REAL *A)
+{
+  long freq[12]; // 0...9 and others and infinity
+  long i;
+  for (i = 0; i < sizeof(freq)/sizeof(long); i++) {
+    freq[i] = 0;
+  }
+  for (i = 0; i < n*n; i++) {
+    long val = (long)(A[i]+0.5); // to long
+    if (val >= 0 && val < 10) {
+      freq[val]++;
+    }
+    else if (val > 1.0e+7) {
+      freq[11]++;
+    }
+    else {
+      freq[10]++;
+    }
+  }
+
+  printf("Summarize A of size %ld\n", n);
+  for (i = 0; i < 10; i++) {
+    if (freq[i] > 0) {
+      printf("dist %ld: %ld elements\n", i, freq[i]);
+    }
+  }
+  printf("dist others: %ld elements\n", freq[10]);
+  printf("dist infinity: %ld elements\n", freq[11]);
+  printf("\n");
+  return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -87,7 +121,8 @@ int main(int argc, char *argv[])
 
   // main computation
   int i;
-  for (i = 0; i < 5; i++) {
+  int niter = 5;
+  for (i = 0; i < niter; i++) {
     double st, et;
     double nops = (double)n*n*n*2.0;
     rand_mat(n, A);
@@ -98,14 +133,10 @@ int main(int argc, char *argv[])
 
     et = Wtime();
 
-#if 1
-    printf("A[0] = %lf, A[%ld] = %lf\n", 
-	   A[0], n*n-1, A[n*n-1]);
-#endif
+    printf("(%d/%d) %.3lf sec -> %lf MFlops\n\n",
+	   i, niter, (et-st), nops/(et-st)/1000000.0);
 
-    printf("%.3lf sec -> %lf MFlops\n\n",
-	   (et-st), nops/(et-st)/1000000.0);
-
+    summary_mat(n, A);
   }
 
   homm_finish();

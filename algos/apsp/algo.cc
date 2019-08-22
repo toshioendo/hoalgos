@@ -432,7 +432,7 @@ int algo(long n, REAL *Am, long lda)
 #endif
 
 
-#if 1 /////////////
+#if 0 /////////////
   // Recursive algorithm
 
 
