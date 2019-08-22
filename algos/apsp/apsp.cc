@@ -36,7 +36,7 @@ int rand_mat(long n, REAL *A)
 
   long j;
   const REAL infval = 1.0e+8;
-  const int percent = 10;
+  const int percent = 2;
   long concount = 0;
 #ifdef USE_OMP
 #pragma omp parallel for

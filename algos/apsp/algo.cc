@@ -46,7 +46,7 @@ int init_algo()
 
   g.basesize = basesize_float_simd();
 
-  g.task_thre = 512;
+  g.task_thre = 32; //64; //128; //256; //512;
   char *envstr;
   envstr = getenv("TASK_THRE");
   if (envstr != NULL) {
@@ -210,9 +210,11 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 #endif
 
   if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
+#if 0
     printf("[recalgo] (do nothing)\n");
     printf("[recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
 	   v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
+#endif
     return 0;
   }
 
@@ -252,64 +254,79 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
     long zm = z0+chunklen;
     if (zm > z1) zm = z1;
 
-    bool small = (chunklen < g.task_thre);
+    bool small = (chunklen <= g.task_thre);
 
-    // 1
-#pragma omp task if(!small && !onpivot)
-    recalgo(inbuf, vec3(x0, y0, z0), vec3(xm, ym, zm),
-	    Am, lda);
-    // 2
-    if (xm < x1) 
-#pragma omp task if(!small)
-      recalgo(inbuf, vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
-    // 3
-    if (ym < y1)
-#pragma omp task if(!small)
-      recalgo(inbuf, vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
+    vec3 v0s[8], v1s[8];
+    v0s[0] = vec3(x0, y0, z0); v1s[0] = vec3(xm, ym, zm);
+    v0s[1] = vec3(xm, y0, z0); v1s[1] = vec3(x1, ym, zm);
+    v0s[2] = vec3(x0, ym, z0); v1s[2] = vec3(xm, y1, zm);
+    v0s[3] = vec3(xm, ym, z0); v1s[3] = vec3(x1, y1, zm);
+    v0s[4] = vec3(xm, ym, zm); v1s[4] = vec3(x1, y1, z1);
+    v0s[5] = vec3(x0, ym, zm); v1s[5] = vec3(xm, y1, z1);
+    v0s[6] = vec3(xm, y0, zm); v1s[6] = vec3(x1, ym, z1);
+    v0s[7] = vec3(x0, y0, zm); v1s[7] = vec3(xm, ym, z1);
 
-    if (!small && onpivot) {
-#pragma omp taskwait
+    if (small) {
+      int it;
+      for (it = 0; it < 4; it++) {
+	recalgo(inbuf, v0s[it], v1s[it], Am, lda);
+      }
+      if (zm < z1) {
+	for (it = 4; it < 8; it++) {
+	  if (v0s[it].x < v1s[it].x && v0s[it].y < v1s[it].y) { 
+	    recalgo(inbuf, v0s[it], v1s[it], Am, lda);
+	  }
+	}
+      }
     }
+    else if (onpivot) {
+      assert(xm < x1 && ym < y1 && zm < z1);
+      // 0
+      recalgo(inbuf, v0s[0], v1s[0], Am, lda);
+      // 1
+#pragma omp task
+      recalgo(inbuf, v0s[1], v1s[1], Am, lda);
+      // 2
+#pragma omp task
+      recalgo(inbuf, v0s[2], v1s[2], Am, lda);
 
-    // 4
-    if (xm < x1 && ym < y1) 
-#pragma omp task if(!small && !onpivot)
-      recalgo(inbuf, vec3(xm, ym, z0), vec3(x1, y1, zm),
-	    Am, lda);
-
-    if (!small) {
 #pragma omp taskwait
-    }
 
-    if (zm < z1) {
+      // 3
+      recalgo(inbuf, v0s[3], v1s[3], Am, lda);
+
+      // 4
+      recalgo(inbuf, v0s[4], v1s[4], Am, lda);
       // 5
-      if (xm < x1 && ym < y1) 
-#pragma omp task if(!small && !onpivot)
-	recalgo(inbuf, vec3(xm, ym, zm), vec3(x1, y1, z1),
-		Am, lda);
+#pragma omp task
+      recalgo(inbuf, v0s[5], v1s[5], Am, lda);
       // 6
-      if (ym < y1)
-#pragma omp task if(!small)
-	recalgo(inbuf, vec3(x0, ym, zm), vec3(xm, y1, z1),
-		Am, lda);
+#pragma omp task
+      recalgo(inbuf, v0s[6], v1s[6], Am, lda);
+
+#pragma omp taskwait
       // 7
-      if (xm < x1) 
-#pragma omp task if(!small)
-	recalgo(inbuf, vec3(xm, y0, zm), vec3(x1, ym, z1),
-		Am, lda);
-
-      if (!small && onpivot) {
-#pragma omp taskwait
+      recalgo(inbuf, v0s[7], v1s[7], Am, lda);
+    }
+    else {
+      // nonpivot
+      int it;
+      for (it = 0; it < 4; it++) {
+#pragma omp task
+	recalgo(inbuf, v0s[it], v1s[it], Am, lda);
       }
 
-      // 8
-#pragma omp task if(!small && !onpivot)
-      recalgo(inbuf, vec3(x0, y0, zm), vec3(xm, ym, z1),
-	      Am, lda);
-
-      if (!small) {
 #pragma omp taskwait
+
+      if (zm < z1) {
+	for (it = 4; it < 8; it++) {
+	  if (v0s[it].x < v1s[it].x && v0s[it].y < v1s[it].y) { 
+#pragma omp task
+	    recalgo(inbuf, v0s[it], v1s[it], Am, lda);
+	  }
+	}
       }
+#pragma omp taskwait
     }
   }
 
@@ -402,10 +419,6 @@ int algo(long n, REAL *Am, long lda)
   kernel1count = 0;
   kernel2count = 0;
 
-
-#if 1 /////////////
-  // Recursive algorithm
-
 #ifdef USE_PACK_MAT
 
   if (n*n > g.bufsize) {
@@ -417,39 +430,78 @@ int algo(long n, REAL *Am, long lda)
   pack_mats(n, Am, lda);
 #endif
 
+
+#if 1 /////////////
+  // Recursive algorithm
+
+
 #ifdef USE_OMP
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMP
   recalgo(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
 
-#ifdef USE_PACK_MAT
-  unpack_mats(n, Am, lda);
-#endif
-
-#elif 0 ///////////
-#warning base slow algorithm for debug
-
-  base(vec3(0, 0, 0), vec3(n, n, n), Am, lda);
-  printf("[APSP:algo] BASE SLOW ALGORITHM is used\n");
-
-#else ///////////
+#elif 1
 #warning Non-recursive. loop-based algorithm
-  long i, j, l;
+
+  printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
+
+  long l;
   long ms = g.basesize.x;
   long ns = g.basesize.y;
   long ks = g.basesize.z;
   for (l = 0; l < n; l += ks) {
-    for (j = 0; j < n; j += ns) {
+    long i, j;
+    // pivot tile
+    base(vec3(l, l, l), vec3(l+ms, l+ns, l+ks),
+	 Am, lda);
+
+    // pivot col
+    {
+      long i;
+#pragma omp parallel for
       for (i = 0; i < n; i += ms) {
-	base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
+	if (i != l) {
+	  base(vec3(i, l, l), vec3(i+ms, l+ns, l+ks),
+	       Am, lda);
+	}
+      }
+    }
+
+    // pivot row
+#pragma omp parallel for
+    for (j = 0; j < n; j += ns) {
+      if (j != l) {
+	base(vec3(l, j, l), vec3(l+ms, j+ns, l+ks),
 	     Am, lda);
+      }
+    }
+
+    // other tiles
+#pragma omp parallel for private (i)
+    for (j = 0; j < n; j += ns) {
+      if (j != l) {
+	for (i = 0; i < n; i += ms) {
+	  if (i != l) {
+	    base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
+		 Am, lda);
+	  }
+	}
       }
     }
   }
 
-  printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
 
+#else ///////////
+#warning base slow algorithm for debug
+
+  printf("[APSP:algo] BASE SLOW ALGORITHM is used\n");
+  base(vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+
+#endif
+
+#ifdef USE_PACK_MAT
+  unpack_mats(n, Am, lda);
 #endif
 
   printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
