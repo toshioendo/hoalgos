@@ -20,6 +20,7 @@ struct global g;
 
 
 double logtime = 0.0;
+double starttime = 0.0;
 double kernel1time = 0.0;
 double kernel2time = 0.0;
 long kernel1count = 0;
@@ -58,13 +59,13 @@ int init_algo()
   }
   
 
-  printf("[apsp:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c\n",
+  printf("[APSP:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c\n",
 	 use_avx2, use_avx512, use_omp);
-  printf("[apsp:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
+  printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
-  printf("[apsp:init_algo] TASK_THRE=%ld\n", g.task_thre);
+  printf("[APSP:init_algo] TASK_THRE=%ld\n", g.task_thre);
 #ifdef USE_OMP
-  printf("[apsp:init_algo] #threads=%d\n", omp_get_max_threads());
+  printf("[APSP:init_algo] #threads=%d\n", omp_get_max_threads());
 #endif
 
 #if 1
@@ -76,7 +77,7 @@ int init_algo()
   g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
 #endif
 
-  printf("[apsp:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
+  printf("[APSP:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
 
   return 0;
 }
@@ -188,13 +189,13 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #if VERBOSE >= 30
   if (meas_kernel)
 #else
-  if (meas_kernel && et > logtime+2.0)
+  if (meas_kernel && et > logtime+4.0)
 #endif
     {
       double t = et-st;
       logtime = et;
-      printf("[base] END [(%ld,%ld,%ld), (%ld,%ld,%ld)) -> %.6lfsec\n", 
-	     v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, t);
+      printf("[APSP:base] END [(%ld,%ld,%ld), (%ld,%ld,%ld)): kernel/elapsed %.3lfsec/%.3lfsec\n",
+	     v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, kernel1time, et-starttime);
     }
 #endif
 
@@ -419,6 +420,7 @@ int algo(long n, REAL *Am, long lda)
   kernel2time = 0.0;
   kernel1count = 0;
   kernel2count = 0;
+  starttime = Wtime();
 
 #ifdef USE_PACK_MAT
 
@@ -432,9 +434,12 @@ int algo(long n, REAL *Am, long lda)
 #endif
 
 
-#if 0 /////////////
+#if 0 /////////////////
   // Recursive algorithm
 
+#if VERBOSE >= 10
+  printf("[APSP:algo] RECURSIVE ALGORITHM is used\n");
+#endif
 
 #ifdef USE_OMP
 #pragma omp parallel
@@ -442,10 +447,12 @@ int algo(long n, REAL *Am, long lda)
 #endif // USE_OMP
   recalgo(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
 
-#elif 1
+#elif 1 ///////////////////////
 #warning Non-recursive. loop-based algorithm
 
+#if VERBOSE >= 10
   printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
+#endif
 
   long l;
   long ms = g.basesize.x;
