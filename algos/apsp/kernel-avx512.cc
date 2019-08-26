@@ -67,7 +67,7 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
     __m512 vb;						\
     __m512 vsum;					\
     __mmask16 mask;					\
-    vb = _mm512_set1_ps(B[(L0)+(J0)*ldb]);		\
+    vb = _mm512_set1_ps(B[(L0)+(J0)*lda]);		\
     vsum = _mm512_add_ps(va0, vb);			\
     mask = _mm512_cmp_ps_mask(vsum, CNAME, _CMP_LT_OQ);	\
     CNAME = _mm512_mask_blend_ps(mask, CNAME, vsum);	\
@@ -98,48 +98,9 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
 
 // This kernel is for nonpivot computation 
 // for size [16,16,k]
-int base_s_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+int base_s_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 {
-  const long m = v1.x-v0.x;
-  const long n = v1.y-v0.y;
-  const long k = v1.z-v0.z;
   // designed for 16x16x(mul of 4)
-
-  long ldb, ldc;
-  long ib, jb, lb;
-  REAL *A, *B, *C;
-  
-  if (g.use_pack_mat) {
-    // overwrite lda, ldb, ldc
-    lda = 16*BLOCK_MAG;
-    ldb = 16*BLOCK_MAG;
-    ldc = 16*BLOCK_MAG;
-    
-    // block idx
-    ib = v0.x/lda;
-    jb = v0.y/lda;
-    lb = v0.z/lda;
-  
-    // index in a block (nonzero with USE_COALESCED_KERNEL
-    const long ii = v0.x % lda;
-    const long jj = v0.y % lda;
-    const long ll = v0.z % lda;
-#ifndef USE_COALESCED_KERNEL
-    assert(ii == 0 && jj == 0 && ll == 0);
-#endif
-    const long bs = lda*lda;
-
-    A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
-    B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
-    C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
-  }
-  else {
-    ldb = lda;
-    ldc = lda;
-    A = &Am[v0.x + v0.z * lda];
-    B = &Am[v0.z + v0.y * lda];
-    C = &Am[v0.x + v0.y * lda];
-  }
 
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
@@ -173,10 +134,10 @@ int base_s_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   {							\
     __m512 v;						\
     __mmask16 mask;					\
-    v = _mm512_loadu_ps(&C[(I0)+(J0)*ldc]);		\
+    v = _mm512_loadu_ps(&C[(I0)+(J0)*lda]);		\
     mask = _mm512_cmp_ps_mask(CNAME, v, _CMP_LT_OQ);	\
     v = _mm512_mask_blend_ps(mask, v, CNAME);		\
-    _mm512_storeu_ps(&C[(I0)+(J0)*ldc], v);		\
+    _mm512_storeu_ps(&C[(I0)+(J0)*lda], v);		\
   } 
 
   CUPDATE(0, 0, vc00);
@@ -203,55 +164,18 @@ int base_s_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
-// for every k, results must be updated on array
-int base_s_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+// This kernel is for pivot computation 
+// for size [16,16,16]
+// for every iteration, results must be updated on array
+int base_s_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 {
-  const long m = v1.x-v0.x;
-  const long n = v1.y-v0.y;
-  const long k = v1.z-v0.z;
-  // designed for 16x16x(mul of 4)
-
-  long ldb, ldc;
-  long ib, jb, lb;
-  REAL *A, *B, *C;
-  
-  if (g.use_pack_mat) {
-    // overwrite lda, ldb, ldc
-    lda = 16*BLOCK_MAG;
-    ldb = 16*BLOCK_MAG;
-    ldc = 16*BLOCK_MAG;
-    
-    // block idx
-    ib = v0.x/lda;
-    jb = v0.y/lda;
-    lb = v0.z/lda;
-  
-    // index in a block (nonzero with USE_COALESCED_KERNEL
-    const long ii = v0.x % lda;
-    const long jj = v0.y % lda;
-    const long ll = v0.z % lda;
-#ifndef USE_COALESCED_KERNEL
-    assert(ii == 0 && jj == 0 && ll == 0);
-#endif
-    const long bs = lda*lda;
-
-    A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
-    B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
-    C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
-  }
-  else {
-    ldb = lda;
-    ldc = lda;
-    A = &Am[v0.x + v0.z * lda];
-    B = &Am[v0.z + v0.y * lda];
-    C = &Am[v0.x + v0.y * lda];
-  }
+  assert(k == 16);
     
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
   const REAL infval = 1.0e+8;
   //#define CCLEAR() (_mm512_set1_ps(infval))
-#define CREAD(I0, J0) (_mm512_loadu_ps(&C[(I0)+(J0)*ldc]))
+#define CREAD(I0, J0) (_mm512_loadu_ps(&C[(I0)+(J0)*lda]))
 
   vc00 = CREAD(0, 0);
   vc01 = CREAD(0, 1);
@@ -271,7 +195,7 @@ int base_s_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   vc0f = CREAD(0, 15);
 
 #define CWRITE(I0, J0, CNAME)				\
-  _mm512_storeu_ps(&C[(I0)+(J0)*ldc], CNAME)		\
+  _mm512_storeu_ps(&C[(I0)+(J0)*lda], CNAME)		\
 
   long l;
   for (l = 0; l < k; l ++) {
@@ -298,7 +222,7 @@ int base_s_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 #undef CREAD
 #undef CWRITE
 
-  //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*ldc]);
+  //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*lda]);
   
   return 0;
 }
@@ -308,64 +232,104 @@ int base_s_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 
 
 //////////////////////////////////////////
-int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1, REAL *Am, long lda)
 {
   assert(vec3eq(g.basesize, vec3sub(v1, v0)));
-  long chunklen = 16;
-  long x0 = v0.x;
-  long x1 = v1.x;
-  long y0 = v0.y;
-  long y1 = v1.y;
-  long z0 = v0.z;
-  long z1 = v1.z;
 
-  long xm = x0+chunklen;
-  long ym = y0+chunklen;
-  long zm = z0+chunklen;
+  REAL *A, *B, *C;
+  size_t offs00, offs01, offs10, offs11;
 
-  // divide task into 8
-  // 1
-  base_s_pivot_float_simd(vec3(x0, y0, z0), vec3(xm, ym, zm), Am, lda);
-  // 2
-  base_s_pivot_float_simd(vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
-  // 3
-  base_s_pivot_float_simd(vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
-  // 4
-  base_s_nonpivot_float_simd(vec3(xm, ym, z0), vec3(x1, y1, zm), Am, lda);
-  // 5
-  base_s_pivot_float_simd(vec3(xm, ym, zm), vec3(x1, y1, z1), Am, lda);
-  // 6
-  base_s_pivot_float_simd(vec3(x0, ym, zm), vec3(xm, y1, z1), Am, lda);
-  // 7
-  base_s_pivot_float_simd(vec3(xm, y0, zm), vec3(x1, ym, z1), Am, lda);
-  // 8
-  base_s_nonpivot_float_simd(vec3(x0, y0, zm), vec3(xm, ym, z1), Am, lda);
+  const long sbs = 16; // small block
+  const long bs = sbs*BLOCK_MAG; // large block
+  
+  if (g.use_pack_mat) {
+    // overwrite lda, ldb, ldc
+    lda = bs;
+    
+    // block idx
+    long ib = v0.x/lda;
+    long jb = v0.y/lda;
+    long lb = v0.z/lda;
+  
+    // index in a block (nonzero with USE_COALESCED_KERNEL
+    const long ii = v0.x % lda;
+    const long jj = v0.y % lda;
+    const long ll = v0.z % lda;
+#ifndef USE_COALESCED_KERNEL
+    assert(ii == 0 && jj == 0 && ll == 0);
+#endif
+    const long bs2 = bs*bs;
+
+    A = &g.Abuf[(ib+lb*g.nb)*bs2];
+    B = &g.Abuf[(lb+jb*g.nb)*bs2];
+    C = &g.Abuf[(ib+jb*g.nb)*bs2];
+    // in block offset
+    // A: (ii+ll*lda)
+    // B: (ll+jj*lda)
+    // C: (ii+jj*lda)
+  }
+  else {
+    A = &Am[v0.x + v0.z * lda];
+    B = &Am[v0.z + v0.y * lda];
+    C = &Am[v0.x + v0.y * lda];
+  }
+
+  offs00 = 0;
+  offs01 = 0 + sbs*lda;
+  offs10 = sbs + 0*lda;
+  offs11 = sbs + sbs*lda;
+
+  if (onpivot) {
+    // divide task into 8
+    // 0
+    //base_s_pivot_float_simd(vec3(x0, y0, z0), vec3(xm, ym, zm), Am, lda);
+    base_s_pivot_float_simd(sbs, A+offs00, B+offs00, C+offs00, lda);
+    // 1
+    //base_s_pivot_float_simd(vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
+    base_s_pivot_float_simd(sbs, A+offs10, B+offs00, C+offs10, lda);
+    // 2
+    //base_s_pivot_float_simd(vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
+    base_s_pivot_float_simd(sbs, A+offs00, B+offs01, C+offs01, lda);
+    // 3
+    //base_s_nonpivot_float_simd(vec3(xm, ym, z0), vec3(x1, y1, zm), Am, lda);
+    base_s_nonpivot_float_simd(sbs, A+offs10, B+offs01, C+offs11, lda);
+    // 4
+    //base_s_pivot_float_simd(vec3(xm, ym, zm), vec3(x1, y1, z1), Am, lda);
+    base_s_pivot_float_simd(sbs, A+offs11, B+offs11, C+offs11, lda);
+    // 5
+    //base_s_pivot_float_simd(vec3(x0, ym, zm), vec3(xm, y1, z1), Am, lda);
+    base_s_pivot_float_simd(sbs, A+offs01, B+offs11, C+offs01, lda);
+    // 6
+    //base_s_pivot_float_simd(vec3(xm, y0, zm), vec3(x1, ym, z1), Am, lda);
+    base_s_pivot_float_simd(sbs, A+offs11, B+offs10, C+offs10, lda);
+    // 7
+    //base_s_nonpivot_float_simd(vec3(x0, y0, zm), vec3(xm, ym, z1), Am, lda);
+    base_s_nonpivot_float_simd(sbs, A+offs01, B+offs10, C+offs00, lda);
+  }
+  else {
+    // divide task into 4 (as large as possible)
+    // 0
+    base_s_nonpivot_float_simd(bs, A+offs00, B+offs00, C + offs00, lda);
+    // 1
+    base_s_nonpivot_float_simd(bs, A+offs10, B+offs00, C + offs10, lda);
+    // 2
+    base_s_nonpivot_float_simd(bs, A+offs00, B+offs01, C + offs01, lda);
+    // 3
+    base_s_nonpivot_float_simd(bs, A+offs10, B+offs01, C + offs11, lda);
+  }
+
+  return 0;
+}
+
+int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+{
+  base_gen_pivot_float_simd(true, v0, v1, Am, lda);
   return 0;
 }
 
 int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 {
-  assert(vec3eq(g.basesize, vec3sub(v1, v0)));
-  long chunklen = 16;
-  long x0 = v0.x;
-  long x1 = v1.x;
-  long y0 = v0.y;
-  long y1 = v1.y;
-  long z0 = v0.z;
-  long z1 = v1.z;
-
-  long xm = x0+chunklen;
-  long ym = y0+chunklen;
-
-  // divide task into 4 (as large as possible)
-  // 1
-  base_s_nonpivot_float_simd(vec3(x0, y0, z0), vec3(xm, ym, z1), Am, lda);
-  // 2
-  base_s_nonpivot_float_simd(vec3(xm, y0, z0), vec3(x1, ym, z1), Am, lda);
-  // 3
-  base_s_nonpivot_float_simd(vec3(x0, ym, z0), vec3(xm, y1, z1), Am, lda);
-  // 4
-  base_s_nonpivot_float_simd(vec3(xm, ym, z0), vec3(x1, y1, z1), Am, lda);
+  base_gen_pivot_float_simd(false, v0, v1, Am, lda);
   return 0;
 }
 
