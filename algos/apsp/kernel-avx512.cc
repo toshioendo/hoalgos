@@ -232,12 +232,13 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 
 
 //////////////////////////////////////////
-inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1, REAL *Am, long lda)
+inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1)
 {
   assert(vec3eq(g.basesize, vec3sub(v1, v0)));
 
   REAL *A, *B, *C;
   size_t offs00, offs01, offs10, offs11;
+  long lda;
 
   const long sbs = 16; // small block
   const long bs = sbs*BLOCK_MAG; // large block
@@ -251,17 +252,16 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1, REAL *Am, l
     long jb = v0.y/lda;
     long lb = v0.z/lda;
   
-    const long bs2 = bs*bs;
+    const long blocklen = bs*bs;
 
-    A = &g.Abuf[(ib+lb*g.nb)*bs2];
-    B = &g.Abuf[(lb+jb*g.nb)*bs2];
-    C = &g.Abuf[(ib+jb*g.nb)*bs2];
-    // in block offset
-    // A: (ii+ll*lda)
-    // B: (ll+jj*lda)
-    // C: (ii+jj*lda)
+    A = &g.Abuf[(ib+lb*g.nb)*blocklen];
+    B = &g.Abuf[(lb+jb*g.nb)*blocklen];
+    C = &g.Abuf[(ib+jb*g.nb)*blocklen];
   }
   else {
+    lda = g.lda;
+
+    REAL *Am = g.Amat;
     A = &Am[v0.x + v0.z * lda];
     B = &Am[v0.z + v0.y * lda];
     C = &Am[v0.x + v0.y * lda];
@@ -306,15 +306,15 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1, REAL *Am, l
   return 0;
 }
 
-int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+int base_pivot_float_simd(vec3 v0, vec3 v1)
 {
-  base_gen_pivot_float_simd(true, v0, v1, Am, lda);
+  base_gen_pivot_float_simd(true, v0, v1);
   return 0;
 }
 
-int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
+int base_nonpivot_float_simd(vec3 v0, vec3 v1)
 {
-  base_gen_pivot_float_simd(false, v0, v1, Am, lda);
+  base_gen_pivot_float_simd(false, v0, v1);
   return 0;
 }
 

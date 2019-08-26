@@ -35,23 +35,19 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 #include "vec3.h"
 
-int init_algo(int *argcp, char ***argvp);
 vec3 basesize_float_simd();
-int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
 
-#ifdef USE_COALESCED_KERNEL
-int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
-int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
-#else
-#define base_pivot_float_simd base_s_pivot_float_simd
-#define base_nonpivot_float_simd base_s_nonpivot_float_simd
-#endif
-
-int algo(long n, REAL *Am, long lda);
+int base_pivot_float_simd(vec3 v0, vec3 v1);
+int base_nonpivot_float_simd(vec3 v0, vec3 v1);
 
 // for pack_mat
 long base_float_packA(REAL *A, long lda, REAL *buf);
 long base_float_unpackA(REAL *A, long lda, REAL *buf);
+
+// algo.cc
+int init_algo(int *argcp, char ***argvp);
+int algo(long n, REAL *Am, long lda);
+
 
 
 /* walltime clock (sync if GPU is used) */
@@ -75,9 +71,16 @@ struct global {
   bool use_recursive;
   bool use_pack_mat;
 
+  // buffer information allocated by user
+  // valid during APSP computation
+  REAL *Amat;
+  long lda;
+  long n;
+
+  // buffer allocated by APSP library
+  // valid if use_pack_mat
   long bufsize; // size in words
   REAL *buf;
-
   REAL *Abuf; //packed A
   long nb;
 };

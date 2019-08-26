@@ -89,14 +89,14 @@ int summary_mat(long n, REAL *A)
     }
   }
 
-  printf("Summarize A of size %ld\n", n);
+  printf("[summary_mat] Summarize matrix of size %ld\n", n);
   for (i = 0; i < 10; i++) {
     if (freq[i] > 0) {
-      printf("dist %ld: %ld elements\n", i, freq[i]);
+      printf("  dist %ld: %ld elements\n", i, freq[i]);
     }
   }
-  printf("dist others: %ld elements\n", freq[10]);
-  printf("dist infinity: %ld elements\n", freq[11]);
+  printf("  dist others: %ld elements\n", freq[10]);
+  printf("  dist infinity: %ld elements\n", freq[11]);
   printf("\n");
   return 0;
 }
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
 
   // main computation
   int i;
-  int niter = 5;
+  int niter = 3;
   for (i = 0; i < niter; i++) {
     double st, et;
     double nops = (double)n*n*n*2.0;
@@ -132,10 +132,13 @@ int main(int argc, char *argv[])
 
     algo(n, A, n);
 
+#if 0
     et = Wtime();
 
     printf("\nsize=%ld (%d/%d) %.3lf sec -> %lf MFlops\n\n",
 	   n, i, niter, (et-st), nops/(et-st)/1000000.0);
+#endif
+    printf("\n##### iteration %d/%d finished\n", i+1, niter);
 
     summary_mat(n, A);
   }

@@ -113,8 +113,11 @@ int init_algo(int *argcp, char ***argvp)
   return 0;
 }
 
-int base_pivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
+int base_pivot_cpuloop(vec3 v0, vec3 v1)
 {
+  REAL *Am = g.Amat;
+  long lda = g.lda;
+
 #if VERBOSE >= 20
   printf("[base_pivot]\n");
 #endif
@@ -146,8 +149,11 @@ int base_pivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
-int base_nonpivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
+int base_nonpivot_cpuloop(vec3 v0, vec3 v1)
 {
+  REAL *Am = g.Amat;
+  long lda = g.lda;
+
 #if VERBOSE >= 20
   printf("[base_nonpivot]\n");
 #endif
@@ -177,7 +183,7 @@ int base_nonpivot_cpuloop(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
-inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
+inline int base(vec3 v0, vec3 v1)
 {
   // base case
 #if VERBOSE >= 20
@@ -195,16 +201,16 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 
   if (v0.x == v0.z || v0.y == v0.z) {
 #if 1
-    base_pivot_float_simd(v0, v1, Am, lda);
+    base_pivot_float_simd(v0, v1);
 #else
-    base_pivot_cpuloop(v0, v1, Am, lda);
+    base_pivot_cpuloop(v0, v1);
 #endif
   }
   else {
 #if 1
-    base_nonpivot_float_simd(v0, v1, Am, lda);
+    base_nonpivot_float_simd(v0, v1);
 #else
-    base_nonpivot_cpuloop(v0, v1, Am, lda);
+    base_nonpivot_cpuloop(v0, v1);
 #endif
   }
 
@@ -220,7 +226,7 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 #if VERBOSE >= 30
   if (meas_kernel)
 #else
-  if (meas_kernel && et > logtime+4.0)
+  if (meas_kernel && et > logtime+10.0)
 #endif
     {
       double t = et-st;
@@ -234,7 +240,7 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
-int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
+int recalgo(vec3 v0, vec3 v1)
 {
   if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
     // do nothing
@@ -257,7 +263,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
   long cz = v1.z-v0.z;
   if (cx <= g.basesize.x && cy <= g.basesize.y && cz <= g.basesize.z) {
     // base case
-    base(v0, v1, Am, lda);
+    base(v0, v1);
   }
   else {
     // general case
@@ -305,47 +311,40 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 
     if (small) {
       int it;
-      for (it = 0; it < 4; it++) {
-	recalgo(inbuf, v0s[it], v1s[it], Am, lda);
-      }
-      if (zm < z1) {
-	for (it = 4; it < 8; it++) {
-	  if (v0s[it].x < v1s[it].x && v0s[it].y < v1s[it].y) { 
-	    recalgo(inbuf, v0s[it], v1s[it], Am, lda);
-	  }
-	}
+      for (it = 0; it < 8; it++) {
+	recalgo(v0s[it], v1s[it]);
       }
     }
     else if (onpivot) {
       // 0
-      recalgo(inbuf, v0s[0], v1s[0], Am, lda);
+      recalgo(v0s[0], v1s[0]);
       // 1 and 2 are parallelizable
       // 1
 #pragma omp task
-      recalgo(inbuf, v0s[1], v1s[1], Am, lda);
+      recalgo(v0s[1], v1s[1]);
       // 2
 #pragma omp task
-      recalgo(inbuf, v0s[2], v1s[2], Am, lda);
+      recalgo(v0s[2], v1s[2]);
 
 #pragma omp taskwait
 
       // 3
-      recalgo(inbuf, v0s[3], v1s[3], Am, lda);
+      recalgo(v0s[3], v1s[3]);
 
       if (zm < z1) {
 	// 4
-	recalgo(inbuf, v0s[4], v1s[4], Am, lda);
+	recalgo(v0s[4], v1s[4]);
 	// 5 and 6 are parallelizable
 	// 5
 #pragma omp task
-	recalgo(inbuf, v0s[5], v1s[5], Am, lda);
+	recalgo(v0s[5], v1s[5]);
 	// 6
 #pragma omp task
-	recalgo(inbuf, v0s[6], v1s[6], Am, lda);
+	recalgo(v0s[6], v1s[6]);
 	
 #pragma omp taskwait
 	// 7
-	recalgo(inbuf, v0s[7], v1s[7], Am, lda);
+	recalgo(v0s[7], v1s[7]);
       }
     }
     else {
@@ -354,7 +353,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
       // 0, 1, 2, 3 are parallelizable
       for (it = 0; it < 4; it++) {
 #pragma omp task
-	recalgo(inbuf, v0s[it], v1s[it], Am, lda);
+	recalgo(v0s[it], v1s[it]);
       }
 
 #pragma omp taskwait
@@ -362,10 +361,8 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
       if (zm < z1) {
 	// 4, 5, 6, 7 are parallelizable
 	for (it = 4; it < 8; it++) {
-	  if (v0s[it].x < v1s[it].x && v0s[it].y < v1s[it].y) { 
 #pragma omp task
-	    recalgo(inbuf, v0s[it], v1s[it], Am, lda);
-	  }
+	  recalgo(v0s[it], v1s[it]);
 	}
       }
 #pragma omp taskwait
@@ -377,8 +374,12 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 
 
 
-int pack_mats(long n,  REAL *Am, long lda)
+int pack_mats()
 {
+  long n = g.n;
+  REAL *Am = g.Amat;
+  long lda = g.lda;
+
   double st = Wtime();
   long nup = roundup(n, g.basesize.x);
   if (nup*nup > g.bufsize) {
@@ -413,8 +414,12 @@ int pack_mats(long n,  REAL *Am, long lda)
   return 0;
 }
 
-int unpack_mats(long n, REAL *Am, long lda)
+int unpack_mats()
 {
+  long n = g.n;
+  REAL *Am = g.Amat;
+  long lda = g.lda;
+
   double st = Wtime();
   long nup = roundup(n, g.basesize.x);
 
@@ -441,8 +446,12 @@ int unpack_mats(long n, REAL *Am, long lda)
 }
 
 
-int blockalgo(long n, REAL *Am, long lda)
+int blockalgo()
 {
+  long n = g.n;
+  REAL *Am = g.Amat;
+  long lda = g.lda;
+
   long l;
   long ms = g.basesize.x;
   long ns = g.basesize.y;
@@ -450,8 +459,7 @@ int blockalgo(long n, REAL *Am, long lda)
   for (l = 0; l < n; l += ks) {
     long i, j;
     // pivot tile
-    base(vec3(l, l, l), vec3(l+ms, l+ns, l+ks),
-	 Am, lda);
+    base(vec3(l, l, l), vec3(l+ms, l+ns, l+ks));
     
     // pivot col
     {
@@ -459,8 +467,7 @@ int blockalgo(long n, REAL *Am, long lda)
 #pragma omp parallel for
       for (i = 0; i < n; i += ms) {
 	if (i != l) {
-	  base(vec3(i, l, l), vec3(i+ms, l+ns, l+ks),
-	       Am, lda);
+	  base(vec3(i, l, l), vec3(i+ms, l+ns, l+ks));
 	}
       }
     }
@@ -469,8 +476,7 @@ int blockalgo(long n, REAL *Am, long lda)
 #pragma omp parallel for
     for (j = 0; j < n; j += ns) {
       if (j != l) {
-	base(vec3(l, j, l), vec3(l+ms, j+ns, l+ks),
-	     Am, lda);
+	base(vec3(l, j, l), vec3(l+ms, j+ns, l+ks));
       }
     }
     
@@ -480,8 +486,7 @@ int blockalgo(long n, REAL *Am, long lda)
       if (j != l) {
 	for (i = 0; i < n; i += ms) {
 	  if (i != l) {
-	    base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
-		 Am, lda);
+	    base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks));
 	  }
 	}
       }
@@ -511,6 +516,11 @@ int algo(long n, REAL *Am, long lda)
   kernel2count = 0;
   starttime = Wtime();
 
+  // save input information
+  g.Amat = Am;
+  g.n = n;
+  g.lda = lda;
+
   if (g.use_pack_mat) {
     if (n*n > g.bufsize) {
       // allocate internal copy buffer eagerly
@@ -523,7 +533,7 @@ int algo(long n, REAL *Am, long lda)
       g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
     }
     
-    pack_mats(n, Am, lda);
+    pack_mats();
   }
 
 
@@ -538,11 +548,11 @@ int algo(long n, REAL *Am, long lda)
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMP
-    recalgo(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+    recalgo(vec3(0, 0, 0), vec3(n, n, n));
     
   }
   else {
-    blockalgo(n, Am, lda);
+    blockalgo();
     
 #if VERBOSE >= 10
     printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
@@ -551,13 +561,19 @@ int algo(long n, REAL *Am, long lda)
   }
 
   if (g.use_pack_mat) {
-    unpack_mats(n, Am, lda);
+    unpack_mats();
   }
+
+  double elapsed = Wtime() - starttime;
 
   printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
 	 kernel1time, kernel1count);
   printf("[APSP:algo] copy: %.3lf sec\n",
 	 copytime);
+
+  double nops = (double)n*n*n*2.0;
+  printf("[APSP:algo] size=%ld elapsed: %.3lf sec -> %.1lf MFlops\n",
+	 n, elapsed, nops/elapsed/1000000.0);
 
   return 0;
 }
