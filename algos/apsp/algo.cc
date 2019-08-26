@@ -234,19 +234,20 @@ inline int base(vec3 v0, vec3 v1, REAL *Am, long lda)
 
 int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 {
-#if VERBOSE >= 30
-  printf("[recAPSP] [(%d,%d,%d), (%d,%d,%d))\n",
-	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
-#endif
-
   if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
-#if 0
-    printf("[recalgo] (do nothing)\n");
-    printf("[recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
+    // do nothing
+#if VERBOSE >= 40
+    printf("[APSP:recalgo] (do nothing)\n");
+    printf("[APSP:recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
 	   v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
 #endif
     return 0;
   }
+
+#if VERBOSE >= 30
+  printf("[APSP:recalgo] [(%d,%d,%d), (%d,%d,%d))\n",
+	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
+#endif
 
   vec3 csize = vec3sub(v1, v0);
   long cx = v1.x-v0.x;
@@ -312,6 +313,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
     else if (onpivot) {
       // 0
       recalgo(inbuf, v0s[0], v1s[0], Am, lda);
+      // 1 and 2 are parallelizable
       // 1
 #pragma omp task
       recalgo(inbuf, v0s[1], v1s[1], Am, lda);
@@ -327,6 +329,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
       if (zm < z1) {
 	// 4
 	recalgo(inbuf, v0s[4], v1s[4], Am, lda);
+	// 5 and 6 are parallelizable
 	// 5
 #pragma omp task
 	recalgo(inbuf, v0s[5], v1s[5], Am, lda);
@@ -342,6 +345,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
     else {
       // nonpivot
       int it;
+      // 0, 1, 2, 3 are parallelizable
       for (it = 0; it < 4; it++) {
 #pragma omp task
 	recalgo(inbuf, v0s[it], v1s[it], Am, lda);
@@ -350,6 +354,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 #pragma omp taskwait
 
       if (zm < z1) {
+	// 4, 5, 6, 7 are parallelizable
 	for (it = 4; it < 8; it++) {
 	  if (v0s[it].x < v1s[it].x && v0s[it].y < v1s[it].y) { 
 #pragma omp task
