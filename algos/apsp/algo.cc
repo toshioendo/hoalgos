@@ -186,11 +186,6 @@ int base_nonpivot_cpuloop(vec3 v0, vec3 v1)
 inline int base(vec3 v0, vec3 v1)
 {
   // base case
-#if VERBOSE >= 20
-  printf("[base] START [(%ld,%ld,%ld), (%ld,%ld,%ld))\n", 
-	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
-#endif
-
   bool meas_kernel = true;
 #ifdef USE_OMP
   if (omp_get_thread_num() != 0) meas_kernel = false;
@@ -231,8 +226,8 @@ inline int base(vec3 v0, vec3 v1)
     {
       double t = et-st;
       logtime = et;
-      printf("[APSP:base] END [(%ld,%ld,%ld), (%ld,%ld,%ld)): kernel/elapsed %.3lfsec/%.3lfsec\n",
-	     v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, kernel1time, et-starttime);
+      printf("[APSP:base]  (%ld,%ld,%ld): kernel/elapsed %.3lfsec/%.3lfsec\n",
+	     v0.x, v0.y, v0.z, kernel1time, et-starttime);
     }
 #endif
 
@@ -257,7 +252,6 @@ int recalgo(vec3 v0, vec3 v1)
 	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
 #endif
 
-  vec3 csize = vec3sub(v1, v0);
   long cx = v1.x-v0.x;
   long cy = v1.y-v0.y;
   long cz = v1.z-v0.z;

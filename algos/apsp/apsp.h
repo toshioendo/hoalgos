@@ -27,8 +27,6 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-//#define USE_PACK_MAT
-
 #define USE_COALESCED_KERNEL
 
 #define VERBOSE 10

@@ -294,13 +294,13 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1)
   else {
     // divide task into 4 (as large as possible)
     // 0
-    kernel_nonpivot_float_simd(bs, A+offs00, B+offs00, C + offs00, lda);
+    kernel_nonpivot_float_simd(bs, A+offs00, B+offs00, C+offs00, lda);
     // 1
-    kernel_nonpivot_float_simd(bs, A+offs10, B+offs00, C + offs10, lda);
+    kernel_nonpivot_float_simd(bs, A+offs10, B+offs00, C+offs10, lda);
     // 2
-    kernel_nonpivot_float_simd(bs, A+offs00, B+offs01, C + offs01, lda);
+    kernel_nonpivot_float_simd(bs, A+offs00, B+offs01, C+offs01, lda);
     // 3
-    kernel_nonpivot_float_simd(bs, A+offs10, B+offs01, C + offs11, lda);
+    kernel_nonpivot_float_simd(bs, A+offs10, B+offs01, C+offs11, lda);
   }
 
   return 0;
