@@ -74,6 +74,7 @@ static double Wtime()
 struct global {
   vec3 basesize; // preferable base case size
   long task_thre;
+  bool use_recursive;
 
   long bufsize; // size in words
   REAL *buf;

@@ -57,7 +57,8 @@ int init_algo()
       exit(1);
     }
   }
-  
+
+  g.use_recursive = true;
 
   printf("[APSP:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c\n",
 	 use_avx2, use_avx512, use_omp);
@@ -75,9 +76,8 @@ int init_algo()
   // for internal copy buffer
   g.bufsize = 4L*1024*1024*1024;
   g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
-#endif
-
   printf("[APSP:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
+#endif
 
   return 0;
 }
@@ -336,6 +336,7 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 }
 
 
+
 #ifdef USE_PACK_MAT
 int pack_mats(long n,  REAL *Am, long lda)
 {
@@ -401,6 +402,55 @@ int unpack_mats(long n, REAL *Am, long lda)
 }
 #endif
 
+int blockalgo(long n, REAL *Am, long lda)
+{
+  long l;
+  long ms = g.basesize.x;
+  long ns = g.basesize.y;
+  long ks = g.basesize.z;
+  for (l = 0; l < n; l += ks) {
+    long i, j;
+    // pivot tile
+    base(vec3(l, l, l), vec3(l+ms, l+ns, l+ks),
+	 Am, lda);
+    
+    // pivot col
+    {
+      long i;
+#pragma omp parallel for
+      for (i = 0; i < n; i += ms) {
+	if (i != l) {
+	  base(vec3(i, l, l), vec3(i+ms, l+ns, l+ks),
+	       Am, lda);
+	}
+      }
+    }
+    
+      // pivot row
+#pragma omp parallel for
+    for (j = 0; j < n; j += ns) {
+      if (j != l) {
+	base(vec3(l, j, l), vec3(l+ms, j+ns, l+ks),
+	     Am, lda);
+      }
+    }
+    
+      // other tiles
+#pragma omp parallel for private (i)
+    for (j = 0; j < n; j += ns) {
+      if (j != l) {
+	for (i = 0; i < n; i += ms) {
+	  if (i != l) {
+	    base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
+		 Am, lda);
+	  }
+	}
+      }
+    }
+  }
+  return 0;
+}
+
 int algo(long n, REAL *Am, long lda)
 {
   printf("[APSP:algo] type=[%s] size=%ld\n",
@@ -426,6 +476,11 @@ int algo(long n, REAL *Am, long lda)
 
   if (n*n > g.bufsize) {
     // allocate internal copy buffer eagerly
+    if (g.buf != NULL) {
+      homm_gfree(g.buf);
+      g.buf = NULL;
+      g.bufsize = 0;
+    }
     g.bufsize = n*n;
     g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
   }
@@ -434,79 +489,28 @@ int algo(long n, REAL *Am, long lda)
 #endif
 
 
-#if 0 /////////////////
-  // Recursive algorithm
-
+  if (g.use_recursive) {
+    // Recursive algorithm
+    
 #if VERBOSE >= 10
-  printf("[APSP:algo] RECURSIVE ALGORITHM is used\n");
+    printf("[APSP:algo] RECURSIVE ALGORITHM is used\n");
 #endif
-
+    
 #ifdef USE_OMP
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMP
-  recalgo(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
-
-#elif 1 ///////////////////////
-#warning Non-recursive. loop-based algorithm
-
-#if VERBOSE >= 10
-  printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
-#endif
-
-  long l;
-  long ms = g.basesize.x;
-  long ns = g.basesize.y;
-  long ks = g.basesize.z;
-  for (l = 0; l < n; l += ks) {
-    long i, j;
-    // pivot tile
-    base(vec3(l, l, l), vec3(l+ms, l+ns, l+ks),
-	 Am, lda);
-
-    // pivot col
-    {
-      long i;
-#pragma omp parallel for
-      for (i = 0; i < n; i += ms) {
-	if (i != l) {
-	  base(vec3(i, l, l), vec3(i+ms, l+ns, l+ks),
-	       Am, lda);
-	}
-      }
-    }
-
-    // pivot row
-#pragma omp parallel for
-    for (j = 0; j < n; j += ns) {
-      if (j != l) {
-	base(vec3(l, j, l), vec3(l+ms, j+ns, l+ks),
-	     Am, lda);
-      }
-    }
-
-    // other tiles
-#pragma omp parallel for private (i)
-    for (j = 0; j < n; j += ns) {
-      if (j != l) {
-	for (i = 0; i < n; i += ms) {
-	  if (i != l) {
-	    base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks),
-		 Am, lda);
-	  }
-	}
-      }
-    }
+    recalgo(false, vec3(0, 0, 0), vec3(n, n, n), Am, lda);
+    
   }
-
-
-#else ///////////
-#warning base slow algorithm for debug
-
-  printf("[APSP:algo] BASE SLOW ALGORITHM is used\n");
-  base(vec3(0, 0, 0), vec3(n, n, n), Am, lda);
-
+  else {
+    blockalgo(n, Am, lda);
+    
+#if VERBOSE >= 10
+    printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
 #endif
+
+  }
 
 #ifdef USE_PACK_MAT
   unpack_mats(n, Am, lda);
