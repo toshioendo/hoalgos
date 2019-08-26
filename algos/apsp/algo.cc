@@ -29,9 +29,33 @@ long ncopy = 0;
 long copysize = 0;
 double copytime = 0.0;
 
-int init_algo()
+int init_algo(int *argcp, char ***argvp)
 {
+  int argc = *argcp;
+  char **argv = *argvp;
+
   printf("Hierarchy Oblivious All Pairs Shortest Path sample\n");
+
+  g.task_thre = 32; //64; //128; //256; //512;
+  g.use_recursive = true;
+
+  // parse args
+  while (argc >= 2) {
+    if (strcmp(argv[1], "-nr") == 0) {
+      // non recursive
+      g.use_recursive = false;
+      argv++;
+      argc--;
+    }
+    else if (strcmp(argv[1], "-tt") == 0) {
+      // set task threshold
+      g.task_thre = atol(argv[2]);
+      argv += 2;
+      argc -= 2;
+    }
+    else break;
+  }
+
   char use_avx2 = 'N';
 #ifdef USE_AVX2
   use_avx2 = 'Y';
@@ -40,14 +64,9 @@ int init_algo()
 #ifdef USE_AVX512
   use_avx512 = 'Y';
 #endif
-  char use_omp = 'N';
-#ifdef USE_OMP
-  use_omp = 'Y';
-#endif
 
   g.basesize = basesize_float_simd();
 
-  g.task_thre = 32; //64; //128; //256; //512;
   char *envstr;
   envstr = getenv("TASK_THRE");
   if (envstr != NULL) {
@@ -58,13 +77,12 @@ int init_algo()
     }
   }
 
-  g.use_recursive = true;
 
-  printf("[APSP:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c, USE_OMP %c\n",
-	 use_avx2, use_avx512, use_omp);
+  printf("[APSP:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c\n",
+	 use_avx2, use_avx512);
   printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
-  printf("[APSP:init_algo] TASK_THRE=%ld\n", g.task_thre);
+  printf("[APSP:init_algo] task_thre(-t)=%ld, use_recursive(-nr)=%d\n", g.task_thre, g.use_recursive);
 #ifdef USE_OMP
   printf("[APSP:init_algo] #threads=%d\n", omp_get_max_threads());
 #endif
@@ -78,6 +96,9 @@ int init_algo()
   g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
   printf("[APSP:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
 #endif
+
+  *argcp = argc;
+  *argvp = argv;
 
   return 0;
 }

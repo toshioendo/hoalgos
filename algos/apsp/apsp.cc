@@ -107,6 +107,9 @@ int main(int argc, char *argv[])
   REAL *A;
   /* default setting option */
   n = 1024; 
+
+  homm_init();
+  init_algo(&argc, &argv);
   
   if (argc >= 2) {
     n = atol(argv[1]);
@@ -115,9 +118,7 @@ int main(int argc, char *argv[])
   printf("type=[%s], size=(%ld)\n",
 	 TYPENAME, n);
 
-  homm_init();
   init_mat(n, &A);
-  init_algo();
 
   // main computation
   int i;

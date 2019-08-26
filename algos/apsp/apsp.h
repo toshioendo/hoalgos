@@ -35,7 +35,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 #include "vec3.h"
 
-int init_algo();
+int init_algo(int *argcp, char ***argvp);
 vec3 basesize_float_simd();
 int base_gen_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
 
