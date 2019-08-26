@@ -34,7 +34,9 @@ int init_algo(int *argcp, char ***argvp)
   int argc = *argcp;
   char **argv = *argvp;
 
-  printf("Hierarchy Oblivious All Pairs Shortest Path sample\n");
+  printf("[APSP:init_algo] ##################################################\n");
+  printf("[APSP:init_algo] Hierarchy Oblivious All Pairs Shortest Path sample\n");
+  printf("[APSP:init_algo] ##################################################\n");
 
   g.task_thre = 32; //64; //128; //256; //512;
   g.use_recursive = true;
