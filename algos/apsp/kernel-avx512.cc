@@ -251,13 +251,6 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1, REAL *Am, l
     long jb = v0.y/lda;
     long lb = v0.z/lda;
   
-    // index in a block (nonzero with USE_COALESCED_KERNEL
-    const long ii = v0.x % lda;
-    const long jj = v0.y % lda;
-    const long ll = v0.z % lda;
-#ifndef USE_COALESCED_KERNEL
-    assert(ii == 0 && jj == 0 && ll == 0);
-#endif
     const long bs2 = bs*bs;
 
     A = &g.Abuf[(ib+lb*g.nb)*bs2];

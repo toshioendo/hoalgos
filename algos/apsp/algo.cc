@@ -264,10 +264,14 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
     long len = cx;
     if (cy > len) len = cy;
     if (cz > len) len = cz;
+#if 0
+    long chunklen = roundup(len/2, g.basesize.x);
+#else
     long chunklen = g.basesize.x;
     while (chunklen*2 < len) {
       chunklen *= 2;
     }
+#endif
     assert(chunklen > 0);
 
     // divide the task into 8
