@@ -98,7 +98,7 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
 
 // This kernel is for nonpivot computation 
 // for size [16,16,k]
-int base_s_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
+int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 {
   // designed for 16x16x(mul of 4)
 
@@ -167,7 +167,7 @@ int base_s_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 // This kernel is for pivot computation 
 // for size [16,16,16]
 // for every iteration, results must be updated on array
-int base_s_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
+int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 {
   assert(k == 16);
     
@@ -282,40 +282,32 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1, REAL *Am, l
   if (onpivot) {
     // divide task into 8
     // 0
-    //base_s_pivot_float_simd(vec3(x0, y0, z0), vec3(xm, ym, zm), Am, lda);
-    base_s_pivot_float_simd(sbs, A+offs00, B+offs00, C+offs00, lda);
+    kernel_pivot_float_simd(sbs, A+offs00, B+offs00, C+offs00, lda);
     // 1
-    //base_s_pivot_float_simd(vec3(xm, y0, z0), vec3(x1, ym, zm), Am, lda);
-    base_s_pivot_float_simd(sbs, A+offs10, B+offs00, C+offs10, lda);
+    kernel_pivot_float_simd(sbs, A+offs10, B+offs00, C+offs10, lda);
     // 2
-    //base_s_pivot_float_simd(vec3(x0, ym, z0), vec3(xm, y1, zm), Am, lda);
-    base_s_pivot_float_simd(sbs, A+offs00, B+offs01, C+offs01, lda);
+    kernel_pivot_float_simd(sbs, A+offs00, B+offs01, C+offs01, lda);
     // 3
-    //base_s_nonpivot_float_simd(vec3(xm, ym, z0), vec3(x1, y1, zm), Am, lda);
-    base_s_nonpivot_float_simd(sbs, A+offs10, B+offs01, C+offs11, lda);
+    kernel_nonpivot_float_simd(sbs, A+offs10, B+offs01, C+offs11, lda);
     // 4
-    //base_s_pivot_float_simd(vec3(xm, ym, zm), vec3(x1, y1, z1), Am, lda);
-    base_s_pivot_float_simd(sbs, A+offs11, B+offs11, C+offs11, lda);
+    kernel_pivot_float_simd(sbs, A+offs11, B+offs11, C+offs11, lda);
     // 5
-    //base_s_pivot_float_simd(vec3(x0, ym, zm), vec3(xm, y1, z1), Am, lda);
-    base_s_pivot_float_simd(sbs, A+offs01, B+offs11, C+offs01, lda);
+    kernel_pivot_float_simd(sbs, A+offs01, B+offs11, C+offs01, lda);
     // 6
-    //base_s_pivot_float_simd(vec3(xm, y0, zm), vec3(x1, ym, z1), Am, lda);
-    base_s_pivot_float_simd(sbs, A+offs11, B+offs10, C+offs10, lda);
+    kernel_pivot_float_simd(sbs, A+offs11, B+offs10, C+offs10, lda);
     // 7
-    //base_s_nonpivot_float_simd(vec3(x0, y0, zm), vec3(xm, ym, z1), Am, lda);
-    base_s_nonpivot_float_simd(sbs, A+offs01, B+offs10, C+offs00, lda);
+    kernel_nonpivot_float_simd(sbs, A+offs01, B+offs10, C+offs00, lda);
   }
   else {
     // divide task into 4 (as large as possible)
     // 0
-    base_s_nonpivot_float_simd(bs, A+offs00, B+offs00, C + offs00, lda);
+    kernel_nonpivot_float_simd(bs, A+offs00, B+offs00, C + offs00, lda);
     // 1
-    base_s_nonpivot_float_simd(bs, A+offs10, B+offs00, C + offs10, lda);
+    kernel_nonpivot_float_simd(bs, A+offs10, B+offs00, C + offs10, lda);
     // 2
-    base_s_nonpivot_float_simd(bs, A+offs00, B+offs01, C + offs01, lda);
+    kernel_nonpivot_float_simd(bs, A+offs00, B+offs01, C + offs01, lda);
     // 3
-    base_s_nonpivot_float_simd(bs, A+offs10, B+offs01, C + offs11, lda);
+    kernel_nonpivot_float_simd(bs, A+offs10, B+offs01, C + offs11, lda);
   }
 
   return 0;

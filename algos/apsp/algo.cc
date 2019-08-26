@@ -89,7 +89,7 @@ int init_algo(int *argcp, char ***argvp)
 	 use_avx2, use_avx512);
   printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
-  printf("[APSP:init_algo] task_thre(-t)=%ld, use_recursive(-nr)=%d, use_pack_mat(-npm)=%d\n",
+  printf("[APSP:init_algo] task_thre(-tt)=%ld, use_recursive(-nr)=%d, use_pack_mat(-npm)=%d\n",
 	 g.task_thre, g.use_recursive, g.use_pack_mat);
 #ifdef USE_OMP
   printf("[APSP:init_algo] #threads=%d\n", omp_get_max_threads());
