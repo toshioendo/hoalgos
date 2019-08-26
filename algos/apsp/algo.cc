@@ -38,12 +38,19 @@ int init_algo(int *argcp, char ***argvp)
 
   g.task_thre = 32; //64; //128; //256; //512;
   g.use_recursive = true;
+  g.use_pack_mat = true;
 
   // parse args
   while (argc >= 2) {
     if (strcmp(argv[1], "-nr") == 0) {
       // non recursive
       g.use_recursive = false;
+      argv++;
+      argc--;
+    }
+    if (strcmp(argv[1], "-npm") == 0) {
+      // no pack mat
+      g.use_pack_mat = false;
       argv++;
       argc--;
     }
@@ -82,7 +89,8 @@ int init_algo(int *argcp, char ***argvp)
 	 use_avx2, use_avx512);
   printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
-  printf("[APSP:init_algo] task_thre(-t)=%ld, use_recursive(-nr)=%d\n", g.task_thre, g.use_recursive);
+  printf("[APSP:init_algo] task_thre(-t)=%ld, use_recursive(-nr)=%d, use_pack_mat(-npm)=%d\n",
+	 g.task_thre, g.use_recursive, g.use_pack_mat);
 #ifdef USE_OMP
   printf("[APSP:init_algo] #threads=%d\n", omp_get_max_threads());
 #endif
@@ -358,7 +366,6 @@ int recalgo(bool inbuf, vec3 v0, vec3 v1, REAL *Am, long lda)
 
 
 
-#ifdef USE_PACK_MAT
 int pack_mats(long n,  REAL *Am, long lda)
 {
   double st = Wtime();
@@ -421,7 +428,7 @@ int unpack_mats(long n, REAL *Am, long lda)
   copytime += (et-st);
   return 0;
 }
-#endif
+
 
 int blockalgo(long n, REAL *Am, long lda)
 {
@@ -493,21 +500,20 @@ int algo(long n, REAL *Am, long lda)
   kernel2count = 0;
   starttime = Wtime();
 
-#ifdef USE_PACK_MAT
-
-  if (n*n > g.bufsize) {
-    // allocate internal copy buffer eagerly
-    if (g.buf != NULL) {
-      homm_gfree(g.buf);
-      g.buf = NULL;
-      g.bufsize = 0;
+  if (g.use_pack_mat) {
+    if (n*n > g.bufsize) {
+      // allocate internal copy buffer eagerly
+      if (g.buf != NULL) {
+	homm_gfree(g.buf);
+	g.buf = NULL;
+	g.bufsize = 0;
+      }
+      g.bufsize = n*n;
+      g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
     }
-    g.bufsize = n*n;
-    g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
+    
+    pack_mats(n, Am, lda);
   }
-
-  pack_mats(n, Am, lda);
-#endif
 
 
   if (g.use_recursive) {
@@ -533,9 +539,9 @@ int algo(long n, REAL *Am, long lda)
 
   }
 
-#ifdef USE_PACK_MAT
-  unpack_mats(n, Am, lda);
-#endif
+  if (g.use_pack_mat) {
+    unpack_mats(n, Am, lda);
+  }
 
   printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
 	 kernel1time, kernel1count);

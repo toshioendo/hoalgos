@@ -20,7 +20,7 @@ vec3 basesize_float_simd()
   return vec3(16*BLOCK_MAG, 16*BLOCK_MAG, 16*BLOCK_MAG);
 }
 
-#ifdef USE_PACK_MAT
+
 long base_float_pack_gen(long m, long n, REAL *A, long lda, REAL *buf)
 {
   assert(m % 16 == 0);
@@ -59,7 +59,7 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
 }
 
 
-#endif
+
 
 // definitions used both for pivot/nonpivot kernels
 #define ONE_COL(L0, J0, CNAME) \
@@ -105,36 +105,41 @@ int base_s_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   const long k = v1.z-v0.z;
   // designed for 16x16x(mul of 4)
 
-#ifdef USE_PACK_MAT
-  // overwrite lda, ldb, ldc
-  lda = 16*BLOCK_MAG;
-  const long ldb = 16*BLOCK_MAG;
-  const long ldc = 16*BLOCK_MAG;
-
-  // block idx
-  long ib = v0.x/lda;
-  long jb = v0.y/lda;
-  long lb = v0.z/lda;
-
-  // index in a block (nonzero with USE_COALESCED_KERNEL
-  long ii = v0.x % lda;
-  long jj = v0.y % lda;
-  long ll = v0.z % lda;
+  long ldb, ldc;
+  long ib, jb, lb;
+  REAL *A, *B, *C;
+  
+  if (g.use_pack_mat) {
+    // overwrite lda, ldb, ldc
+    lda = 16*BLOCK_MAG;
+    ldb = 16*BLOCK_MAG;
+    ldc = 16*BLOCK_MAG;
+    
+    // block idx
+    ib = v0.x/lda;
+    jb = v0.y/lda;
+    lb = v0.z/lda;
+  
+    // index in a block (nonzero with USE_COALESCED_KERNEL
+    const long ii = v0.x % lda;
+    const long jj = v0.y % lda;
+    const long ll = v0.z % lda;
 #ifndef USE_COALESCED_KERNEL
-  assert(ii == 0 && jj == 0 && ll == 0);
+    assert(ii == 0 && jj == 0 && ll == 0);
 #endif
-  const long bs = lda*lda;
+    const long bs = lda*lda;
 
-  REAL *A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
-  REAL *B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
-  REAL *C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
-#else
-  const long ldb = lda;
-  const long ldc = lda;
-  REAL *A = &Am[v0.x + v0.z * lda];
-  REAL *B = &Am[v0.z + v0.y * lda];
-  REAL *C = &Am[v0.x + v0.y * lda];
-#endif
+    A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
+    B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
+    C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
+  }
+  else {
+    ldb = lda;
+    ldc = lda;
+    A = &Am[v0.x + v0.z * lda];
+    B = &Am[v0.z + v0.y * lda];
+    C = &Am[v0.x + v0.y * lda];
+  }
 
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
@@ -206,37 +211,42 @@ int base_s_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   const long k = v1.z-v0.z;
   // designed for 16x16x(mul of 4)
 
-#ifdef USE_PACK_MAT
-  // overwrite lda, ldb, ldc
-  lda = 16*BLOCK_MAG;
-  const long ldb = 16*BLOCK_MAG;
-  const long ldc = 16*BLOCK_MAG;
-
-  // block idx
-  long ib = v0.x/lda;
-  long jb = v0.y/lda;
-  long lb = v0.z/lda;
-
-  // index in a block (nonzero with USE_COALESCED_KERNEL
-  long ii = v0.x % lda;
-  long jj = v0.y % lda;
-  long ll = v0.z % lda;
+  long ldb, ldc;
+  long ib, jb, lb;
+  REAL *A, *B, *C;
+  
+  if (g.use_pack_mat) {
+    // overwrite lda, ldb, ldc
+    lda = 16*BLOCK_MAG;
+    ldb = 16*BLOCK_MAG;
+    ldc = 16*BLOCK_MAG;
+    
+    // block idx
+    ib = v0.x/lda;
+    jb = v0.y/lda;
+    lb = v0.z/lda;
+  
+    // index in a block (nonzero with USE_COALESCED_KERNEL
+    const long ii = v0.x % lda;
+    const long jj = v0.y % lda;
+    const long ll = v0.z % lda;
 #ifndef USE_COALESCED_KERNEL
-  assert(ii == 0 && jj == 0 && ll == 0);
+    assert(ii == 0 && jj == 0 && ll == 0);
 #endif
-  const long bs = lda*lda;
+    const long bs = lda*lda;
 
-  REAL *A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
-  REAL *B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
-  REAL *C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
-#else
-  const long ldb = lda;
-  const long ldc = lda;
-  REAL *A = &Am[v0.x + v0.z * lda];
-  REAL *B = &Am[v0.z + v0.y * lda];
-  REAL *C = &Am[v0.x + v0.y * lda];
-#endif
-
+    A = &g.Abuf[(ib+lb*g.nb)*bs + (ii+ll*lda)];
+    B = &g.Abuf[(lb+jb*g.nb)*bs + (ll+jj*lda)];
+    C = &g.Abuf[(ib+jb*g.nb)*bs + (ii+jj*lda)];
+  }
+  else {
+    ldb = lda;
+    ldc = lda;
+    A = &Am[v0.x + v0.z * lda];
+    B = &Am[v0.z + v0.y * lda];
+    C = &Am[v0.x + v0.y * lda];
+  }
+    
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
   const REAL infval = 1.0e+8;
@@ -298,7 +308,6 @@ int base_s_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 
 
 //////////////////////////////////////////
-#ifdef USE_COALESCED_KERNEL
 int base_pivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
 {
   assert(vec3eq(g.basesize, vec3sub(v1, v0)));
@@ -360,4 +369,4 @@ int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda)
   return 0;
 }
 
-#endif
+

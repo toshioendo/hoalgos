@@ -27,7 +27,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-#define USE_PACK_MAT
+//#define USE_PACK_MAT
 
 #define USE_COALESCED_KERNEL
 
@@ -49,11 +49,9 @@ int base_nonpivot_float_simd(vec3 v0, vec3 v1, REAL *Am, long lda);
 
 int algo(long n, REAL *Am, long lda);
 
-
-#ifdef USE_PACK_MAT
+// for pack_mat
 long base_float_packA(REAL *A, long lda, REAL *buf);
 long base_float_unpackA(REAL *A, long lda, REAL *buf);
-#endif
 
 
 /* walltime clock (sync if GPU is used) */
@@ -75,6 +73,7 @@ struct global {
   vec3 basesize; // preferable base case size
   long task_thre;
   bool use_recursive;
+  bool use_pack_mat;
 
   long bufsize; // size in words
   REAL *buf;
