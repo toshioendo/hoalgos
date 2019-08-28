@@ -113,7 +113,7 @@ int init_algo(int *argcp, char ***argvp)
   return 0;
 }
 
-int base_pivot_cpuloop(vec3 v0, vec3 v1)
+inline int base_pivot_cpuloop(vec3 v0, vec3 v1)
 {
   REAL *Am = g.Amat;
   long lda = g.lda;
@@ -149,7 +149,7 @@ int base_pivot_cpuloop(vec3 v0, vec3 v1)
   return 0;
 }
 
-int base_nonpivot_cpuloop(vec3 v0, vec3 v1)
+inline int base_nonpivot_cpuloop(vec3 v0, vec3 v1)
 {
   REAL *Am = g.Amat;
   long lda = g.lda;
@@ -183,6 +183,17 @@ int base_nonpivot_cpuloop(vec3 v0, vec3 v1)
   return 0;
 }
 
+int base_cpuloop(bool onpivot, vec3 v0, vec3 v1)
+{
+  if (onpivot) {
+    base_pivot_cpuloop(v0, v1);
+  }
+  else {
+    base_nonpivot_cpuloop(v0, v1);
+  }
+  return 0;
+}
+
 inline int base(vec3 v0, vec3 v1)
 {
   // base case
@@ -195,31 +206,25 @@ inline int base(vec3 v0, vec3 v1)
   double et = 0.0;
   if (meas_kernel) st = Wtime();
 
-  if (v0.x == v0.z || v0.y == v0.z) {
+  bool onpivot = (v0.x == v0.z || v0.y == v0.z);
+
 #if 1
-    base_pivot_float_simd(v0, v1);
+  base_float_simd(onpivot, v0, v1);
 #else
-    base_pivot_cpuloop(v0, v1);
+  base_cpuloop(onpivot, v0, v1);
 #endif
-    if (meas_kernel) {
-      et = Wtime();
+
+  if (meas_kernel) {
+    et = Wtime();
+    if (onpivot) {
       kernel1time += (et-st);
       kernel1count++;
     }
-  }
-  else {
-#if 1
-    base_nonpivot_float_simd(v0, v1);
-#else
-    base_nonpivot_cpuloop(v0, v1);
-#endif
-    if (meas_kernel) {
-      et = Wtime();
+    else {
       kernel2time += (et-st);
       kernel2count++;
     }
   }
-
 
   // print periodically
 #if VERBOSE >= 10

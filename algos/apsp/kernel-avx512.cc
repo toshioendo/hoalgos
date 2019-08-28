@@ -9,15 +9,10 @@
 #include <homm.h>
 #include "apsp.h"
 
-#ifdef USE_COALESCED_KERNEL
-#define BLOCK_MAG 2
-#else
-#define BLOCK_MAG 1
-#endif
 
 vec3 basesize_float_simd()
 {
-  return vec3(16*BLOCK_MAG, 16*BLOCK_MAG, 16*BLOCK_MAG);
+  return vec3(16*KERNEL_MAG, 16*KERNEL_MAG, 16*KERNEL_MAG);
 }
 
 
@@ -243,6 +238,7 @@ int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 #ifdef USE_ZMM_ARRAY
   for (l = 0; l < k; l += 1) {
     __m512 va0 = _mm512_loadu_ps(&A[0+l*lda]);
+#pragma unroll
     for (long j = 0; j < 16; j++) {
       ONE_COL(l, j, vcs[j]);
     }
@@ -303,7 +299,7 @@ int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 
 
 //////////////////////////////////////////
-inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1)
+int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
 {
   assert(vec3eq(g.basesize, vec3sub(v1, v0)));
 
@@ -312,22 +308,22 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1)
   long lda;
 
   const long sbs = 16; // small block
-  const long bs = sbs*BLOCK_MAG; // large block
+  const long bs = sbs*KERNEL_MAG; // large block
   
   if (g.use_pack_mat) {
     // overwrite lda, ldb, ldc
     lda = bs;
     
     // block idx
-    long ib = v0.x/lda;
-    long jb = v0.y/lda;
-    long lb = v0.z/lda;
+    long xb = v0.x/lda;
+    long yb = v0.y/lda;
+    long zb = v0.z/lda;
   
     const long blocklen = bs*bs;
 
-    A = &g.Abuf[(ib+lb*g.nb)*blocklen];
-    B = &g.Abuf[(lb+jb*g.nb)*blocklen];
-    C = &g.Abuf[(ib+jb*g.nb)*blocklen];
+    A = &g.Abuf[(xb+zb*g.nb)*blocklen];
+    B = &g.Abuf[(zb+yb*g.nb)*blocklen];
+    C = &g.Abuf[(xb+yb*g.nb)*blocklen];
   }
   else {
     lda = g.lda;
@@ -343,6 +339,14 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1)
   offs10 = sbs + 0*lda;
   offs11 = sbs + sbs*lda;
 
+#if KERNEL_MAG == 1
+  if (onpivot) {
+    kernel_pivot_float_simd(sbs, A, B, C, lda);
+  }
+  else {
+    kernel_nonpivot_float_simd(sbs, A, B, C, lda);
+  }
+#elif KERNEL_MAG == 2
   if (onpivot) {
     // divide task into 8
     // 0
@@ -373,20 +377,18 @@ inline int base_gen_pivot_float_simd(bool onpivot, vec3 v0, vec3 v1)
     // 3
     kernel_nonpivot_float_simd(bs, A+offs10, B+offs01, C+offs11, lda);
   }
+#else 
+#error
+  if (onpivot) {
+    for (long kb = 0; kb < KERNEL_MAG; kb++) {
+      // pivot tile [kb,kb]
+    }
+  }
+  else {
+  }
+
+#endif
 
   return 0;
 }
-
-int base_pivot_float_simd(vec3 v0, vec3 v1)
-{
-  base_gen_pivot_float_simd(true, v0, v1);
-  return 0;
-}
-
-int base_nonpivot_float_simd(vec3 v0, vec3 v1)
-{
-  base_gen_pivot_float_simd(false, v0, v1);
-  return 0;
-}
-
 

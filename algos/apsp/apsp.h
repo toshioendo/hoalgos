@@ -27,7 +27,8 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-#define USE_COALESCED_KERNEL
+// kernel configuration
+#define KERNEL_MAG 2
 
 #define VERBOSE 10
 
@@ -35,8 +36,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 vec3 basesize_float_simd();
 
-int base_pivot_float_simd(vec3 v0, vec3 v1);
-int base_nonpivot_float_simd(vec3 v0, vec3 v1);
+int base_float_simd(bool onpivot, vec3 v0, vec3 v1);
 
 // for pack_mat
 long base_float_packA(REAL *A, long lda, REAL *buf);
