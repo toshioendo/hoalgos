@@ -192,6 +192,7 @@ inline int base(vec3 v0, vec3 v1)
 #endif
 
   double st = 0.0;
+  double et = 0.0;
   if (meas_kernel) st = Wtime();
 
   if (v0.x == v0.z || v0.y == v0.z) {
@@ -200,6 +201,11 @@ inline int base(vec3 v0, vec3 v1)
 #else
     base_pivot_cpuloop(v0, v1);
 #endif
+    if (meas_kernel) {
+      et = Wtime();
+      kernel1time += (et-st);
+      kernel1count++;
+    }
   }
   else {
 #if 1
@@ -207,14 +213,13 @@ inline int base(vec3 v0, vec3 v1)
 #else
     base_nonpivot_cpuloop(v0, v1);
 #endif
+    if (meas_kernel) {
+      et = Wtime();
+      kernel2time += (et-st);
+      kernel2count++;
+    }
   }
 
-  double et = 0.0;
-  if (meas_kernel) {
-    et = Wtime();
-    kernel1time += (et-st);
-    kernel1count++;
-  }
 
   // print periodically
 #if VERBOSE >= 10
@@ -226,8 +231,8 @@ inline int base(vec3 v0, vec3 v1)
     {
       double t = et-st;
       logtime = et;
-      printf("[APSP:base]  (%ld,%ld,%ld): kernel/elapsed %.3lfsec/%.3lfsec\n",
-	     v0.x, v0.y, v0.z, kernel1time, et-starttime);
+      printf("[APSP:base]  (%ld,%ld,%ld): k1/k2/total=%.3lfsec/%.3lfsec/%.3lfsec\n",
+	     v0.x, v0.y, v0.z, kernel1time, kernel2time, et-starttime);
     }
 #endif
 
@@ -237,7 +242,14 @@ inline int base(vec3 v0, vec3 v1)
 
 int recalgo(vec3 v0, vec3 v1)
 {
-  if (v0.x >= v1.x || v0.y >= v1.y || v0.z >= v1.z) {
+  long x0 = v0.x;
+  long x1 = v1.x;
+  long y0 = v0.y;
+  long y1 = v1.y;
+  long z0 = v0.z;
+  long z1 = v1.z;
+
+  if (x0 >= x1 || y0 >= y1 || z0 >= z1) {
     // do nothing
 #if VERBOSE >= 40
     printf("[APSP:recalgo] (do nothing)\n");
@@ -252,16 +264,16 @@ int recalgo(vec3 v0, vec3 v1)
 	 v0.x, v0.y, v0.z, v1.x, v1.y, v1.z);
 #endif
 
-  long cx = v1.x-v0.x;
-  long cy = v1.y-v0.y;
-  long cz = v1.z-v0.z;
+  long cx = x1-x0;
+  long cy = y1-y0;
+  long cz = z1-z0;
   if (cx <= g.basesize.x && cy <= g.basesize.y && cz <= g.basesize.z) {
     // base case
     base(v0, v1);
   }
   else {
     // general case
-    bool onpivot = (v0.x == v0.z || v0.y == v0.z);
+    bool onpivot = (x0 == z0 || y0 == z0);
 
     long len = cx;
     if (cy > len) len = cy;
@@ -277,13 +289,6 @@ int recalgo(vec3 v0, vec3 v1)
     assert(chunklen > 0);
 
     // divide the task into 8
-    long x0 = v0.x;
-    long x1 = v1.x;
-    long y0 = v0.y;
-    long y1 = v1.y;
-    long z0 = v0.z;
-    long z1 = v1.z;
-
     long xm = x0+chunklen;
     if (xm > x1) xm = x1;
     long ym = y0+chunklen;
@@ -560,8 +565,10 @@ int algo(long n, REAL *Am, long lda)
 
   double elapsed = Wtime() - starttime;
 
-  printf("[APSP:algo] kernel: %.3lf sec, %ld times\n",
-	 kernel1time, kernel1count);
+  printf("[APSP:algo] kernel1: %.3lf sec, %ld times (avg %.3lf us)\n",
+	 kernel1time, kernel1count, 1000000.0*kernel1time/kernel1count);
+  printf("[APSP:algo] kernel2: %.3lf sec, %ld times (avg %.3lf us)\n",
+	 kernel2time, kernel2count, 1000000.0*kernel2time/kernel2count);
   printf("[APSP:algo] copy: %.3lf sec\n",
 	 copytime);
 

@@ -58,8 +58,9 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
   return base_float_unpack_gen(g.basesize.x, g.basesize.y, A, lda, buf);
 }
 
-
-
+#define USE_RUCCI_KERNEL1  // only in pivot kernel
+//#define USE_ZMM_ARRAY
+//#define USE_ALWAYS_KERNEL1
 
 // definitions used both for pivot/nonpivot kernels
 #define ONE_COL(L0, J0, CNAME) \
@@ -72,11 +73,14 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
     mask = _mm512_cmp_ps_mask(vsum, CNAME, _CMP_LT_OQ);	\
     CNAME = _mm512_mask_blend_ps(mask, CNAME, vsum);	\
   }	
-  
+
+
+#ifndef USE_ZMM_ARRAY
+
+// this is defined only if !USE_ZMM_ARRAY  
 #define ONE_STEP(L0)					\
   {							\
-    __m512 va0;						\
-    va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);		\
+    __m512 va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);		\
     ONE_COL(L0, 0, vc00);				\
     ONE_COL(L0, 1, vc01);				\
     ONE_COL(L0, 2, vc02);				\
@@ -95,87 +99,31 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
     ONE_COL(L0, 15, vc0f);				\
   }
 
+#endif // !USE_ZMM_ARRAY
 
-// This kernel is for nonpivot computation 
-// for size [16,16,k]
-int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
-{
-  // designed for 16x16x(mul of 4)
-
-  __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
-  __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
-  const REAL infval = 1.0e+8;
-#define CCLEAR() (_mm512_set1_ps(infval))
-
-  vc00 = CCLEAR();
-  vc01 = CCLEAR();
-  vc02 = CCLEAR();
-  vc03 = CCLEAR();
-  vc04 = CCLEAR();
-  vc05 = CCLEAR();
-  vc06 = CCLEAR();
-  vc07 = CCLEAR();
-  vc08 = CCLEAR();
-  vc09 = CCLEAR();
-  vc0a = CCLEAR();
-  vc0b = CCLEAR();
-  vc0c = CCLEAR();
-  vc0d = CCLEAR();
-  vc0e = CCLEAR();
-  vc0f = CCLEAR();
-
-  long l;
-  for (l = 0; l < k; l += 2) {
-    ONE_STEP(l+0);
-    ONE_STEP(l+1);
-  }
-
-#define CUPDATE(I0, J0, CNAME)				\
-  {							\
-    __m512 v;						\
-    __mmask16 mask;					\
-    v = _mm512_loadu_ps(&C[(I0)+(J0)*lda]);		\
-    mask = _mm512_cmp_ps_mask(CNAME, v, _CMP_LT_OQ);	\
-    v = _mm512_mask_blend_ps(mask, v, CNAME);		\
-    _mm512_storeu_ps(&C[(I0)+(J0)*lda], v);		\
-  } 
-
-  CUPDATE(0, 0, vc00);
-  CUPDATE(0, 1, vc01);
-  CUPDATE(0, 2, vc02);
-  CUPDATE(0, 3, vc03);
-  CUPDATE(0, 4, vc04);
-  CUPDATE(0, 5, vc05);
-  CUPDATE(0, 6, vc06);
-  CUPDATE(0, 7, vc07);
-  CUPDATE(0, 8, vc08);
-  CUPDATE(0, 9, vc09);
-  CUPDATE(0, 10, vc0a);
-  CUPDATE(0, 11, vc0b);
-  CUPDATE(0, 12, vc0c);
-  CUPDATE(0, 13, vc0d);
-  CUPDATE(0, 14, vc0e);
-  CUPDATE(0, 15, vc0f);
-
-#undef CUPDATE
-
-  //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*ldc]);
-  
-  return 0;
-}
 
 // This kernel is for pivot computation 
-// for size [16,16,16]
+// for size [16,16,k]
 // for every iteration, results must be updated on array
 int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 {
-  assert(k == 16);
-    
+#define CREAD(I0, J0) (_mm512_loadu_ps(&C[(I0)+(J0)*lda]))
+#define CWRITE(I0, J0, CNAME)				\
+  _mm512_storeu_ps(&C[(I0)+(J0)*lda], CNAME)
+
+  const REAL infval = 1.0e+8;
+
+#ifdef USE_RUCCI_KERNEL1
+  // no accumlator
+#elif USE_ZMM_ARRAY
+  register __m512 vcs[16];
+#pragma unroll
+  for (long ic = 0; ic < 16; ic++)
+    vcs[ic] = CREAD(0, ic);
+
+#else
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
-  const REAL infval = 1.0e+8;
-  //#define CCLEAR() (_mm512_set1_ps(infval))
-#define CREAD(I0, J0) (_mm512_loadu_ps(&C[(I0)+(J0)*lda]))
 
   vc00 = CREAD(0, 0);
   vc01 = CREAD(0, 1);
@@ -194,11 +142,30 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
   vc0e = CREAD(0, 14);
   vc0f = CREAD(0, 15);
 
-#define CWRITE(I0, J0, CNAME)				\
-  _mm512_storeu_ps(&C[(I0)+(J0)*lda], CNAME)		\
+#endif // !USE_ZMM_ARRAY
 
   long l;
   for (l = 0; l < k; l ++) {
+#ifdef USE_RUCCI_KERNEL1
+    __m512 va = _mm512_loadu_ps(&A[0+l*lda]);
+#pragma unroll
+    for (long j = 0; j < 16; j++) {
+      __m512 vc = _mm512_loadu_ps(&C[0+j*lda]);
+      __m512 vb = _mm512_set1_ps(B[l+j*lda]);
+      __m512 vsum = _mm512_add_ps(va, vb);
+      __mmask16 mask = _mm512_cmp_ps_mask(vsum, vc, _CMP_LT_OQ);
+      _mm512_mask_storeu_ps(&C[0+j*lda], mask, vsum);
+    }
+
+#elif defined USE_ZMM_ARRAY
+    __m512 va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);
+#pragma unroll
+    for (long j = 0; j < 16; j++) {
+      ONE_COL(l, j, vcs[j]);			
+      CWRITE(0, j, vcs[j]);
+    }
+
+#else
     ONE_STEP(l+0);
     CWRITE(0, 0, vc00);
     CWRITE(0, 1, vc01);
@@ -216,6 +183,7 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
     CWRITE(0, 13, vc0d);
     CWRITE(0, 14, vc0e);
     CWRITE(0, 15, vc0f);
+#endif // !USE_ZMM_ARRAY
   }
 
 
@@ -226,6 +194,109 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
   
   return 0;
 }
+
+#ifdef USE_ALWAYS_KERNEL1
+
+#define kernel_nonpivot_float_simd kernel_pivot_float_simd
+
+#else
+// This kernel is for nonpivot computation 
+// for size [16,16,k]
+int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
+{
+  // designed for 16x16x(mul of 4)
+#ifdef USE_ZMM_ARRAY
+  register __m512 vcs[16];
+#else
+  __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
+  __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
+#endif
+
+  const REAL infval = 1.0e+8;
+#define CCLEAR() (_mm512_set1_ps(infval))
+
+#ifdef USE_ZMM_ARRAY
+#pragma unroll
+  for (long ic = 0; ic < 16; ic++)
+    vcs[ic] = CCLEAR();
+  
+#else
+  vc00 = CCLEAR();
+  vc01 = CCLEAR();
+  vc02 = CCLEAR();
+  vc03 = CCLEAR();
+  vc04 = CCLEAR();
+  vc05 = CCLEAR();
+  vc06 = CCLEAR();
+  vc07 = CCLEAR();
+  vc08 = CCLEAR();
+  vc09 = CCLEAR();
+  vc0a = CCLEAR();
+  vc0b = CCLEAR();
+  vc0c = CCLEAR();
+  vc0d = CCLEAR();
+  vc0e = CCLEAR();
+  vc0f = CCLEAR();
+#endif // !USE_ZMM_ARRAY
+
+  long l;
+#ifdef USE_ZMM_ARRAY
+  for (l = 0; l < k; l += 1) {
+    __m512 va0 = _mm512_loadu_ps(&A[0+l*lda]);
+    for (long j = 0; j < 16; j++) {
+      ONE_COL(l, j, vcs[j]);
+    }
+  }
+#else
+  for (l = 0; l < k; l += 2) {
+    ONE_STEP(l+0);
+    ONE_STEP(l+1);
+  }
+#endif
+
+#define CUPDATE(I0, J0, CNAME)				\
+  {							\
+    __m512 v;						\
+    __mmask16 mask;					\
+    v = _mm512_loadu_ps(&C[(I0)+(J0)*lda]);		\
+    mask = _mm512_cmp_ps_mask(CNAME, v, _CMP_LT_OQ);	\
+    v = _mm512_mask_blend_ps(mask, v, CNAME);		\
+    _mm512_storeu_ps(&C[(I0)+(J0)*lda], v);		\
+  } 
+
+#ifdef USE_ZMM_ARRAY
+  for (long ic = 0; ic < 16; ic++)
+    CUPDATE(0, ic, vcs[ic]);
+
+#else
+  CUPDATE(0, 0, vc00);
+  CUPDATE(0, 1, vc01);
+  CUPDATE(0, 2, vc02);
+  CUPDATE(0, 3, vc03);
+  CUPDATE(0, 4, vc04);
+  CUPDATE(0, 5, vc05);
+  CUPDATE(0, 6, vc06);
+  CUPDATE(0, 7, vc07);
+  CUPDATE(0, 8, vc08);
+  CUPDATE(0, 9, vc09);
+  CUPDATE(0, 10, vc0a);
+  CUPDATE(0, 11, vc0b);
+  CUPDATE(0, 12, vc0c);
+  CUPDATE(0, 13, vc0d);
+  CUPDATE(0, 14, vc0e);
+  CUPDATE(0, 15, vc0f);
+#endif
+
+#undef CUPDATE
+
+  //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*ldc]);
+  
+  return 0;
+}
+
+#endif // !USE_ALWAYS_KERNEL1
+
+
 
 #undef ONE_COL
 #undef ONE_STEP
