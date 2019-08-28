@@ -54,7 +54,6 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
 }
 
 #define USE_RUCCI_KERNEL1  // only in pivot kernel
-//#define USE_ZMM_ARRAY
 //#define USE_ALWAYS_KERNEL1
 
 // definitions used both for pivot/nonpivot kernels
@@ -70,9 +69,6 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
   }	
 
 
-#ifndef USE_ZMM_ARRAY
-
-// this is defined only if !USE_ZMM_ARRAY  
 #define ONE_STEP(L0)					\
   {							\
     __m512 va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);		\
@@ -94,8 +90,6 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
     ONE_COL(L0, 15, vc0f);				\
   }
 
-#endif // !USE_ZMM_ARRAY
-
 
 // This kernel is for pivot computation 
 // for size [16,16,k]
@@ -110,12 +104,6 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 
 #ifdef USE_RUCCI_KERNEL1
   // no accumlator
-#elif USE_ZMM_ARRAY
-  register __m512 vcs[16];
-#pragma unroll
-  for (long ic = 0; ic < 16; ic++)
-    vcs[ic] = CREAD(0, ic);
-
 #else
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
@@ -137,7 +125,7 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
   vc0e = CREAD(0, 14);
   vc0f = CREAD(0, 15);
 
-#endif // !USE_ZMM_ARRAY
+#endif
 
   long l;
   for (l = 0; l < k; l ++) {
@@ -150,14 +138,6 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
       __m512 vsum = _mm512_add_ps(va, vb);
       __mmask16 mask = _mm512_cmp_ps_mask(vsum, vc, _CMP_LT_OQ);
       _mm512_mask_storeu_ps(&C[0+j*lda], mask, vsum);
-    }
-
-#elif defined USE_ZMM_ARRAY
-    __m512 va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);
-#pragma unroll
-    for (long j = 0; j < 16; j++) {
-      ONE_COL(l, j, vcs[j]);			
-      CWRITE(0, j, vcs[j]);
     }
 
 #else
@@ -200,22 +180,12 @@ int kernel_pivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 {
   // designed for 16x16x(mul of 4)
-#ifdef USE_ZMM_ARRAY
-  register __m512 vcs[16];
-#else
   __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
   __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
-#endif
 
   const REAL infval = 1.0e+8;
 #define CCLEAR() (_mm512_set1_ps(infval))
 
-#ifdef USE_ZMM_ARRAY
-#pragma unroll
-  for (long ic = 0; ic < 16; ic++)
-    vcs[ic] = CCLEAR();
-  
-#else
   vc00 = CCLEAR();
   vc01 = CCLEAR();
   vc02 = CCLEAR();
@@ -232,23 +202,13 @@ int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
   vc0d = CCLEAR();
   vc0e = CCLEAR();
   vc0f = CCLEAR();
-#endif // !USE_ZMM_ARRAY
 
   long l;
-#ifdef USE_ZMM_ARRAY
-  for (l = 0; l < k; l += 1) {
-    __m512 va0 = _mm512_loadu_ps(&A[0+l*lda]);
-#pragma unroll
-    for (long j = 0; j < 16; j++) {
-      ONE_COL(l, j, vcs[j]);
-    }
-  }
-#else
+  // incrementing 2 looks best. 1 or 4 is slower.
   for (l = 0; l < k; l += 2) {
     ONE_STEP(l+0);
     ONE_STEP(l+1);
   }
-#endif
 
 #define CUPDATE(I0, J0, CNAME)				\
   {							\
@@ -260,11 +220,6 @@ int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
     _mm512_storeu_ps(&C[(I0)+(J0)*lda], v);		\
   } 
 
-#ifdef USE_ZMM_ARRAY
-  for (long ic = 0; ic < 16; ic++)
-    CUPDATE(0, ic, vcs[ic]);
-
-#else
   CUPDATE(0, 0, vc00);
   CUPDATE(0, 1, vc01);
   CUPDATE(0, 2, vc02);
@@ -281,7 +236,6 @@ int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
   CUPDATE(0, 13, vc0d);
   CUPDATE(0, 14, vc0e);
   CUPDATE(0, 15, vc0f);
-#endif
 
 #undef CUPDATE
 
@@ -291,7 +245,6 @@ int kernel_nonpivot_float_simd(long k, REAL *A, REAL *B, REAL *C, long lda)
 }
 
 #endif // !USE_ALWAYS_KERNEL1
-
 
 
 #undef ONE_COL
@@ -304,7 +257,6 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
   assert(vec3eq(g.basesize, vec3sub(v1, v0)));
 
   REAL *A, *B, *C;
-  size_t offs00, offs01, offs10, offs11;
   long lda;
 
   const long sbs = 16; // small block
@@ -334,10 +286,8 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
     C = &Am[v0.x + v0.y * lda];
   }
 
-  offs00 = 0;
-  offs01 = 0 + sbs*lda;
-  offs10 = sbs + 0*lda;
-  offs11 = sbs + sbs*lda;
+  size_t coffs = sbs*lda;
+  size_t roffs = sbs;
 
 #if KERNEL_MAG == 1
   if (onpivot) {
@@ -350,41 +300,70 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
   if (onpivot) {
     // divide task into 8
     // 0
-    kernel_pivot_float_simd(sbs, A+offs00, B+offs00, C+offs00, lda);
+    kernel_pivot_float_simd(sbs, A, B, C, lda);
     // 1
-    kernel_pivot_float_simd(sbs, A+offs10, B+offs00, C+offs10, lda);
+    kernel_pivot_float_simd(sbs, A+roffs, B, C+roffs, lda);
     // 2
-    kernel_pivot_float_simd(sbs, A+offs00, B+offs01, C+offs01, lda);
+    kernel_pivot_float_simd(sbs, A, B+coffs, C+coffs, lda);
     // 3
-    kernel_nonpivot_float_simd(sbs, A+offs10, B+offs01, C+offs11, lda);
+    kernel_nonpivot_float_simd(sbs, A+roffs, B+coffs, C+roffs+coffs, lda);
     // 4
-    kernel_pivot_float_simd(sbs, A+offs11, B+offs11, C+offs11, lda);
+    kernel_pivot_float_simd(sbs, A+roffs+coffs, B+roffs+coffs, C+roffs+coffs, lda);
     // 5
-    kernel_pivot_float_simd(sbs, A+offs01, B+offs11, C+offs01, lda);
+    kernel_pivot_float_simd(sbs, A+coffs, B+roffs+coffs, C+coffs, lda);
     // 6
-    kernel_pivot_float_simd(sbs, A+offs11, B+offs10, C+offs10, lda);
+    kernel_pivot_float_simd(sbs, A+roffs+coffs, B+roffs, C+roffs, lda);
     // 7
-    kernel_nonpivot_float_simd(sbs, A+offs01, B+offs10, C+offs00, lda);
+    kernel_nonpivot_float_simd(sbs, A+coffs, B+roffs, C, lda);
   }
   else {
     // divide task into 4 (as large as possible)
     // 0
-    kernel_nonpivot_float_simd(bs, A+offs00, B+offs00, C+offs00, lda);
+    kernel_nonpivot_float_simd(bs, A, B, C, lda);
     // 1
-    kernel_nonpivot_float_simd(bs, A+offs10, B+offs00, C+offs10, lda);
+    kernel_nonpivot_float_simd(bs, A+roffs, B, C+roffs, lda);
     // 2
-    kernel_nonpivot_float_simd(bs, A+offs00, B+offs01, C+offs01, lda);
+    kernel_nonpivot_float_simd(bs, A, B+coffs, C+coffs, lda);
     // 3
-    kernel_nonpivot_float_simd(bs, A+offs10, B+offs01, C+offs11, lda);
+    kernel_nonpivot_float_simd(bs, A+roffs, B+coffs, C+roffs+coffs, lda);
   }
 #else 
-#error
+  long ib, jb, kb;
   if (onpivot) {
-    for (long kb = 0; kb < KERNEL_MAG; kb++) {
-      // pivot tile [kb,kb]
+#define PARAMS(ib, jb, kb) A+roffs*(ib)+coffs*(kb), B+roffs*(kb)+coffs*(jb), C+roffs*(ib)+coffs*(jb)
+
+    for (kb = 0; kb < KERNEL_MAG; kb++) {
+      // pivot tile [kb,kb, kb]
+      kernel_pivot_float_simd(sbs, PARAMS(kb, kb, kb), lda);
+      // pivot col [ib, kb, kb]
+      for (ib = 0; ib < KERNEL_MAG; ib++) {
+	if (ib != kb) 
+	  kernel_pivot_float_simd(sbs, PARAMS(ib, kb, kb), lda);
+      }
+      // pivot row [kb, jb, kb]
+      for (jb = 0; jb < KERNEL_MAG; jb++) {
+	if (ib != kb) 
+	  kernel_pivot_float_simd(sbs, PARAMS(kb, jb, kb), lda);
+      }
+      // other tiles [ib, jb, kb]
+      for (jb = 0; jb < KERNEL_MAG; jb++) {
+	if (jb == kb) continue;
+#pragma unroll
+	for (ib = 0; ib < KERNEL_MAG; ib++) {
+	  if (ib != kb) 
+	    kernel_nonpivot_float_simd(sbs, PARAMS(ib, jb, kb), lda);
+	}
+      }
     }
   }
   else {
+    // divide task into KERNEL_MAG**2 (as large as possible)
+    for (jb = 0; jb < KERNEL_MAG; jb++) {
+#pragma unroll
+      for (ib = 0; ib < KERNEL_MAG; ib++) {
+	kernel_nonpivot_float_simd(bs, PARAMS(ib, jb, 0), lda);
+      }
+    }
   }
 
 #endif

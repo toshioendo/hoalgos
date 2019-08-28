@@ -2,7 +2,8 @@ CC = icc
 CXX = icpc
 LD = $(CXX)
 
-CFLAGS = -O3 -g -I../../include -qopenmp
+CFLAGS = -O3 -g  -I../../include -qopenmp
+#-O3
 #-mavx512f
 #
 
