@@ -28,7 +28,9 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 };
 
 // kernel configuration
-#define KERNEL_MAG 2
+#define KERNEL_MAG 4 //2
+#define USE_RUCCI_KERNEL1  // only in pivot kernel
+//#define USE_ALWAYS_KERNEL1  // this is slow.
 
 #define VERBOSE 10
 
