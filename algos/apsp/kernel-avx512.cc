@@ -130,32 +130,29 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
 
 
 // Kernel2
-// This kernel is for nonpivot computation 
+// This kernel is only for nonpivot computation, where A, B, C are distinct.
 // for size [DWIDTH,DWIDTH,k]
 int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, long lda)
 {
   // designed for DWIDTHxDWIDTHx(mul of 4)
-  __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
-  __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
-
   const REAL infval = 1.0e+8;
 
-  vc00 = CCLEAR(infval);
-  vc01 = CCLEAR(infval);
-  vc02 = CCLEAR(infval);
-  vc03 = CCLEAR(infval);
-  vc04 = CCLEAR(infval);
-  vc05 = CCLEAR(infval);
-  vc06 = CCLEAR(infval);
-  vc07 = CCLEAR(infval);
-  vc08 = CCLEAR(infval);
-  vc09 = CCLEAR(infval);
-  vc0a = CCLEAR(infval);
-  vc0b = CCLEAR(infval);
-  vc0c = CCLEAR(infval);
-  vc0d = CCLEAR(infval);
-  vc0e = CCLEAR(infval);
-  vc0f = CCLEAR(infval);
+  __m512 vc00 = CCLEAR(infval);
+  __m512 vc01 = CCLEAR(infval);
+  __m512 vc02 = CCLEAR(infval);
+  __m512 vc03 = CCLEAR(infval);
+  __m512 vc04 = CCLEAR(infval);
+  __m512 vc05 = CCLEAR(infval);
+  __m512 vc06 = CCLEAR(infval);
+  __m512 vc07 = CCLEAR(infval);
+  __m512 vc08 = CCLEAR(infval);
+  __m512 vc09 = CCLEAR(infval);
+  __m512 vc0a = CCLEAR(infval);
+  __m512 vc0b = CCLEAR(infval);
+  __m512 vc0c = CCLEAR(infval);
+  __m512 vc0d = CCLEAR(infval);
+  __m512 vc0e = CCLEAR(infval);
+  __m512 vc0f = CCLEAR(infval);
 
   // incrementing 2 looks best. 1 or 4 is slower.
   for (long l = 0; l < k; l += 2) {
