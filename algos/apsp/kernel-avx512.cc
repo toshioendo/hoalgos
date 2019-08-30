@@ -105,16 +105,12 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
   } 
 
 
-// This kernel is for pivot computation 
-#ifdef USE_RUCCI_KERNEL1
-
+// Kernel1 (based on Rucci's)
+// This kernel can be used for pivot computation 
 // m must be a multiple of DWIDTH
 int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, long lda)
 {
-  const REAL infval = 1.0e+8;
-
-  // no accumlator
-
+  // assert(m % DWIDTH == 0);
   for (long l = 0; l < k; l ++) {
     for (long i = 0; i < m; i += DWIDTH) {
       __m512 va = _mm512_loadu_ps(&A[i+l*lda]);
@@ -129,73 +125,11 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
     }
   }
 
-  //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*lda]);
-  
   return 0;
 }
 
 
-#else // !USE_RUCCI_KERNEL
-// for size [DWIDTH,DWIDTH,k]
-// for every iteration, results must be updated on array
-int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, long lda)
-{
-  const REAL infval = 1.0e+8;
-
-  __m512 vc00, vc01, vc02, vc03, vc04, vc05, vc06, vc07;
-  __m512 vc08, vc09, vc0a, vc0b, vc0c, vc0d, vc0e, vc0f;
-
-  vc00 = CREAD(0, 0);
-  vc01 = CREAD(0, 1);
-  vc02 = CREAD(0, 2);
-  vc03 = CREAD(0, 3);
-  vc04 = CREAD(0, 4);
-  vc05 = CREAD(0, 5);
-  vc06 = CREAD(0, 6);
-  vc07 = CREAD(0, 7);
-  vc08 = CREAD(0, 8);
-  vc09 = CREAD(0, 9);
-  vc0a = CREAD(0, 10);
-  vc0b = CREAD(0, 11);
-  vc0c = CREAD(0, 12);
-  vc0d = CREAD(0, 13);
-  vc0e = CREAD(0, 14);
-  vc0f = CREAD(0, 15);
-
-  long l;
-  for (l = 0; l < k; l ++) {
-    ONE_STEP(l+0);
-    CWRITE(0, 0, vc00);
-    CWRITE(0, 1, vc01);
-    CWRITE(0, 2, vc02);
-    CWRITE(0, 3, vc03);
-    CWRITE(0, 4, vc04);
-    CWRITE(0, 5, vc05);
-    CWRITE(0, 6, vc06);
-    CWRITE(0, 7, vc07);
-    CWRITE(0, 8, vc08);
-    CWRITE(0, 9, vc09);
-    CWRITE(0, 10, vc0a);
-    CWRITE(0, 11, vc0b);
-    CWRITE(0, 12, vc0c);
-    CWRITE(0, 13, vc0d);
-    CWRITE(0, 14, vc0e);
-    CWRITE(0, 15, vc0f);
-  }
-
-
-  //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*lda]);
-  
-  return 0;
-}
-
-#endif // !USE_RUCCI_KERNEL1
-
-#ifdef USE_ALWAYS_KERNEL1
-
-#define kernel_nonpivot_float_simd kernel_pivot_float_simd
-
-#else
+// Kernel2
 // This kernel is for nonpivot computation 
 // for size [DWIDTH,DWIDTH,k]
 int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, long lda)
@@ -223,9 +157,8 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
   vc0e = CCLEAR(infval);
   vc0f = CCLEAR(infval);
 
-  long l;
   // incrementing 2 looks best. 1 or 4 is slower.
-  for (l = 0; l < k; l += 2) {
+  for (long l = 0; l < k; l += 2) {
     ONE_STEP(l+0);
     ONE_STEP(l+1);
   }
@@ -252,8 +185,6 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
   return 0;
 }
 
-#endif // !USE_ALWAYS_KERNEL1
-
 
 #undef ONE_COL
 #undef ONE_STEP
@@ -272,7 +203,7 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
   long lda;
 
   const long sbs = DWIDTH; // small block
-  const long bs = sbs*KERNEL_MAG; // large block
+  const long bs = DWIDTH*KERNEL_MAG; // large block
   
   if (g.use_pack_mat) {
     // overwrite lda, ldb, ldc
@@ -301,79 +232,24 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
   size_t coffs = sbs*lda;
   size_t roffs = sbs;
 
-#define PARAMS(ib, jb, kb) A+roffs*(ib)+coffs*(kb), B+roffs*(kb)+coffs*(jb), C+roffs*(ib)+coffs*(jb)
+  //#define PARAMS(ib, jb, kb) A+roffs*(ib)+coffs*(kb), B+roffs*(kb)+coffs*(jb), C+roffs*(ib)+coffs*(jb)
+
+#ifndef USE_SECOND_KERNEL
+  onpivot = true;
+#endif
 
   if (onpivot) {
-#if KERNEL_MAG == 1 || defined USE_RUCCI_KERNEL1
     kernel_pivot_float_simd(bs, bs, bs, A, B, C, lda);
-#elif KERNEL_MAG == 2
-    // divide task into 8
-    // 0
-    kernel_pivot_float_simd(sbs, sbs, sbs, A, B, C, lda);
-    // 1
-    kernel_pivot_float_simd(sbs, sbs, sbs, A+roffs, B, C+roffs, lda);
-    // 2
-    kernel_pivot_float_simd(sbs, sbs, sbs, A, B+coffs, C+coffs, lda);
-    // 3
-    kernel_nonpivot_float_simd(sbs, sbs, sbs, A+roffs, B+coffs, C+roffs+coffs, lda);
-    // 4
-    kernel_pivot_float_simd(sbs, sbs, sbs, A+roffs+coffs, B+roffs+coffs, C+roffs+coffs, lda);
-    // 5
-    kernel_pivot_float_simd(sbs, sbs, sbs, A+coffs, B+roffs+coffs, C+coffs, lda);
-    // 6
-    kernel_pivot_float_simd(sbs, sbs, sbs, A+roffs+coffs, B+roffs, C+roffs, lda);
-    // 7
-    kernel_nonpivot_float_simd(sbs, sbs, sbs, A+coffs, B+roffs, C, lda);
-#else  // KERNEL_MAG > 2
-    long ib, jb, kb;
-    for (kb = 0; kb < KERNEL_MAG; kb++) {
-      // pivot tile [kb,kb, kb]
-      kernel_pivot_float_simd(sbs, sbs, sbs, PARAMS(kb, kb, kb), lda);
-      // pivot col [ib, kb, kb]
-      for (ib = 0; ib < KERNEL_MAG; ib++) {
-	if (ib != kb) 
-	  kernel_pivot_float_simd(sbs, sbs, sbs, PARAMS(ib, kb, kb), lda);
-      }
-      // pivot row [kb, jb, kb]
-      for (jb = 0; jb < KERNEL_MAG; jb++) {
-	if (ib != kb) 
-	  kernel_pivot_float_simd(sbs, sbs, sbs, PARAMS(kb, jb, kb), lda);
-      }
-      // other tiles [ib, jb, kb]
-      for (jb = 0; jb < KERNEL_MAG; jb++) {
-	if (jb == kb) continue;
-#pragma unroll
-	for (ib = 0; ib < KERNEL_MAG; ib++) {
-	  if (ib != kb) 
-	    kernel_nonpivot_float_simd(sbs, sbs, sbs, PARAMS(ib, jb, kb), lda);
-	}
-      }
-    }
-#endif // KERNEL_MAG
   }
-  else {  ///////////// !onpivot
-#if KERNEL_MAG == 1
-    kernel_nonpivot_float_simd(sbs, sbs, sbs, A, B, C, lda);
-#elif KERNEL_MAG == 2
-    // divide task into 4 (as large as possible)
-    // 0
-    kernel_nonpivot_float_simd(sbs, sbs, bs, A, B, C, lda);
-    // 1
-    kernel_nonpivot_float_simd(sbs, sbs, bs, A+roffs, B, C+roffs, lda);
-    // 2
-    kernel_nonpivot_float_simd(sbs, sbs, bs, A, B+coffs, C+coffs, lda);
-    // 3
-    kernel_nonpivot_float_simd(sbs, sbs, bs, A+roffs, B+coffs, C+roffs+coffs, lda);
-#else  // KERNEL_MAG > 2
+  else {
     // divide task into KERNEL_MAG^2 (as large as possible)
-    long ib, jb, kb;
+    long ib, jb;
     for (jb = 0; jb < KERNEL_MAG; jb++) {
 #pragma unroll
       for (ib = 0; ib < KERNEL_MAG; ib++) {
-	kernel_nonpivot_float_simd(sbs, sbs, bs, PARAMS(ib, jb, 0), lda);
+	kernel_nonpivot_float_simd(sbs, sbs, bs, A+roffs*ib, B+coffs*jb, C+roffs*ib+coffs*jb, lda);
       }
     }
-#endif // KERNEL_MAG
   }
 
 

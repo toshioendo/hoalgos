@@ -9,12 +9,11 @@
 #  define REAL float
 #  define TYPENAME "float"
 #  define USE_FLOAT
-#  define GEMM sgemm_
 #else
+#  error NOT IMPLEMENTED YET
 #  define REAL double
 #  define TYPENAME "double"
 #  define USE_DOUBLE
-#  define GEMM dgemm_
 #endif
 
 #define FCHAR char *
@@ -29,8 +28,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 
 // kernel configuration
 #define KERNEL_MAG 4 //2
-#define USE_RUCCI_KERNEL1  // only in pivot kernel
-//#define USE_ALWAYS_KERNEL1  // this is slow.
+#define USE_SECOND_KERNEL
 
 #define VERBOSE 10
 
