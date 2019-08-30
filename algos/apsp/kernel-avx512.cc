@@ -117,14 +117,14 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
 
   for (long l = 0; l < k; l ++) {
     for (long i = 0; i < m; i += DWIDTH) {
-      __m512 va = _mm512_loadu_ps(&A[0+l*lda]);
+      __m512 va = _mm512_loadu_ps(&A[i+l*lda]);
 #pragma unroll
       for (long j = 0; j < n; j++) {
-	__m512 vc = _mm512_loadu_ps(&C[0+j*lda]);
+	__m512 vc = _mm512_loadu_ps(&C[i+j*lda]);
 	__m512 vb = _mm512_set1_ps(B[l+j*lda]);
 	__m512 vsum = _mm512_add_ps(va, vb);
 	__mmask16 mask = _mm512_cmp_ps_mask(vsum, vc, _CMP_LT_OQ);
-	_mm512_mask_storeu_ps(&C[0+j*lda], mask, vsum);
+	_mm512_mask_storeu_ps(&C[i+j*lda], mask, vsum);
       }
     }
   }
@@ -301,9 +301,11 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
   size_t coffs = sbs*lda;
   size_t roffs = sbs;
 
+#define PARAMS(ib, jb, kb) A+roffs*(ib)+coffs*(kb), B+roffs*(kb)+coffs*(jb), C+roffs*(ib)+coffs*(jb)
+
   if (onpivot) {
-#if KERNEL_MAG == 1
-    kernel_pivot_float_simd(sbs, sbs, sbs, A, B, C, lda);
+#if KERNEL_MAG == 1 || defined USE_RUCCI_KERNEL1
+    kernel_pivot_float_simd(bs, bs, bs, A, B, C, lda);
 #elif KERNEL_MAG == 2
     // divide task into 8
     // 0
@@ -324,7 +326,6 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
     kernel_nonpivot_float_simd(sbs, sbs, sbs, A+coffs, B+roffs, C, lda);
 #else  // KERNEL_MAG > 2
     long ib, jb, kb;
-#define PARAMS(ib, jb, kb) A+roffs*(ib)+coffs*(kb), B+roffs*(kb)+coffs*(jb), C+roffs*(ib)+coffs*(jb)
     for (kb = 0; kb < KERNEL_MAG; kb++) {
       // pivot tile [kb,kb, kb]
       kernel_pivot_float_simd(sbs, sbs, sbs, PARAMS(kb, kb, kb), lda);
