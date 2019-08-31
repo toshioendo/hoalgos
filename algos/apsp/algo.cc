@@ -47,6 +47,8 @@ int init_algo(int *argcp, char ***argvp)
   g.use_pack_mat = true;
   g.use_2nd_kernel = true;
 
+  g.breakpoint = -1;
+
   // parse args
   while (argc >= 2) {
     if (strcmp(argv[1], "-nr") == 0) {
@@ -417,9 +419,8 @@ int recalgo(vec3 v0, vec3 v1)
 
 
 
-int pack_mats()
+int pack_mats(long n)
 {
-  long n = g.n;
   REAL *Am = g.Amat;
   long lda = g.lda;
 
@@ -457,9 +458,8 @@ int pack_mats()
   return 0;
 }
 
-int unpack_mats()
+int unpack_mats(long n)
 {
-  long n = g.n;
   REAL *Am = g.Amat;
   long lda = g.lda;
 
@@ -489,17 +489,17 @@ int unpack_mats()
 }
 
 
-int blockalgo()
+int blockalgo(vec3 size)
 {
-  long n = g.n;
-  REAL *Am = g.Amat;
-  long lda = g.lda;
+  long m = size.x;
+  long n = size.y;
+  long k = size.z;
 
   long l;
   long ms = g.basesize.x;
   long ns = g.basesize.y;
   long ks = g.basesize.z;
-  for (l = 0; l < n; l += ks) {
+  for (l = 0; l < k; l += ks) {
     long i, j;
     // pivot tile
     base(vec3(l, l, l), vec3(l+ms, l+ns, l+ks));
@@ -508,7 +508,7 @@ int blockalgo()
     {
       long i;
 #pragma omp parallel for
-      for (i = 0; i < n; i += ms) {
+      for (i = 0; i < m; i += ms) {
 	if (i != l) {
 	  base(vec3(i, l, l), vec3(i+ms, l+ns, l+ks));
 	}
@@ -527,7 +527,7 @@ int blockalgo()
 #pragma omp parallel for private (i)
     for (j = 0; j < n; j += ns) {
       if (j != l) {
-	for (i = 0; i < n; i += ms) {
+	for (i = 0; i < m; i += ms) {
 	  if (i != l) {
 	    base(vec3(i, j, l), vec3(i+ms, j+ns, l+ks));
 	  }
@@ -535,6 +535,12 @@ int blockalgo()
       }
     }
   }
+  return 0;
+}
+
+int algo_set_breakpoint(long k)
+{
+  g.breakpoint = k;
   return 0;
 }
 
@@ -563,7 +569,6 @@ int algo(long n, REAL *Am, long lda)
 
   // save input information
   g.Amat = Am;
-  g.n = n;
   g.lda = lda;
 
   if (g.use_pack_mat) {
@@ -578,9 +583,16 @@ int algo(long n, REAL *Am, long lda)
       g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
     }
     
-    pack_mats();
+    pack_mats(n);
   }
 
+  vec3 size = vec3(n, n, n);
+  if (g. breakpoint > 0 && g.breakpoint < n) {
+#if VERBOSE >= 5
+    printf("[APSP:algo] Set breakpoint %ld < %ld\n", g.breakpoint, n);
+#endif
+    size.z = g.breakpoint;
+  }
 
   if (g.use_recursive) {
     // Recursive algorithm
@@ -593,11 +605,11 @@ int algo(long n, REAL *Am, long lda)
 #pragma omp parallel
 #pragma omp single
 #endif // USE_OMP
-    recalgo(vec3(0, 0, 0), vec3(n, n, n));
+    recalgo(vec3(0, 0, 0), size);
     
   }
   else {
-    blockalgo();
+    blockalgo(size);
     
 #if VERBOSE >= 10
     printf("[APSP:algo] NON-RECURSIVE ALGORITHM is used\n");
@@ -606,7 +618,7 @@ int algo(long n, REAL *Am, long lda)
   }
 
   if (g.use_pack_mat) {
-    unpack_mats();
+    unpack_mats(n);
   }
 
   double elapsed = Wtime() - starttime;
@@ -619,9 +631,9 @@ int algo(long n, REAL *Am, long lda)
   printf("[APSP:algo] copy: %.3lf sec\n",
 	 copytime);
 
-  double nops = (double)n*n*n*2.0;
-  printf("[APSP:algo] size=%ld elapsed: %.3lf sec -> %.1lf MFlops\n",
-	 n, elapsed, nops/elapsed/1000000.0);
+  double nops = (double)size.x*size.y*size.z*2.0;
+  printf("[APSP:algo] size=(%ld,%ld,%ld) elapsed: %.3lf sec -> %.1lf MFlops\n",
+	 size.x, size.y, size.z, elapsed, nops/elapsed/1000000.0);
 #endif
 
   return 0;

@@ -41,6 +41,7 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf);
 // algo.cc
 int init_algo(int *argcp, char ***argvp);
 int algo(long n, REAL *Am, long lda);
+int algo_set_breakpoint(long k);
 
 
 
@@ -71,7 +72,9 @@ struct global {
   // valid during APSP computation
   REAL *Amat;
   long lda;
-  long n;
+  //long n;
+
+  long breakpoint; // only for debug or warming up. -1 if ignored
 
   // buffer allocated by APSP library
   // valid if use_pack_mat
