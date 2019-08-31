@@ -192,16 +192,12 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
 //////////////////////////////////////////
 int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
 {
-  assert(vec3eq(g.basesize, vec3sub(v1, v0)));
-
   REAL *A, *B, *C;
   long lda;
-
-  const long sbs = DWIDTH; // small block
-  const long bs = g.basesize.x; // large block
   
   if (g.use_pack_mat) {
     // overwrite lda, ldb, ldc
+    const long bs = g.basesize.x; // large block
     lda = bs;
     
     // block idx
@@ -224,14 +220,11 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
     C = &Am[v0.x + v0.y * lda];
   }
 
-  size_t coffs = lda;
-  size_t roffs = 1;
-
   if (onpivot) {
-    kernel_pivot_float_simd(bs, bs, bs, A, B, C, lda);
+    kernel_pivot_float_simd(v1.x-v0.x, v1.y-v0.y, v1.z-v0.z, A, B, C, lda);
   }
   else {
-    kernel_nonpivot_float_simd(bs, bs, bs, A, B, C, lda);
+    kernel_nonpivot_float_simd(v1.x-v0.x, v1.y-v0.y, v1.z-v0.z, A, B, C, lda);
   }
 
   return 0;

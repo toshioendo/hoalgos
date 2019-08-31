@@ -63,6 +63,7 @@ static double Wtime()
 struct global {
   vec3 basesize; // preferable base case size
   long task_thre;
+  bool use_blocking;
   bool use_recursive;
   bool use_exp_div;
   bool use_pack_mat;

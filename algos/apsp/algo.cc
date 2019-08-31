@@ -40,8 +40,10 @@ int init_algo(int *argcp, char ***argvp)
   printf("[APSP:init_algo] ##################################################\n");
 #endif
 
+  // configure algorithm
   g.basesize = basesize_float_simd();
   g.task_thre = g.basesize.x; //512;
+  g.use_blocking = true;
   g.use_recursive = true;
   g.use_exp_div = true;
   g.use_pack_mat = true;
@@ -51,7 +53,13 @@ int init_algo(int *argcp, char ***argvp)
 
   // parse args
   while (argc >= 2) {
-    if (strcmp(argv[1], "-nr") == 0) {
+    if (strcmp(argv[1], "-nb") == 0) {
+      // non blocking
+      g.use_blocking = false;
+      argv++;
+      argc--;
+    }
+    else if (strcmp(argv[1], "-nr") == 0) {
       // non recursive
       g.use_recursive = false;
       argv++;
@@ -91,6 +99,12 @@ int init_algo(int *argcp, char ***argvp)
     else break;
   }
 
+  if (!g.use_blocking) {
+    // conflict configuration
+    g.use_recursive = false;
+    g.use_pack_mat = false;
+  }
+
   char use_avx2 = 'N';
 #ifdef USE_AVX2
   use_avx2 = 'Y';
@@ -122,6 +136,7 @@ int init_algo(int *argcp, char ***argvp)
   printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
 	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
   printf("[APSP:init_algo] -tt: task_thre=%ld\n", g.task_thre);
+  printf("[APSP:init_algo] -nb: blocking=%d\n", g.use_blocking);
   printf("[APSP:init_algo] -nr: recursive=%d\n", g.use_recursive);
   printf("[APSP:init_algo] -ned: exp_div=%d\n", g.use_exp_div);
   printf("[APSP:init_algo] -npm: pack_mat=%d\n", g.use_pack_mat);
@@ -594,7 +609,11 @@ int algo(long n, REAL *Am, long lda)
     size.z = g.breakpoint;
   }
 
-  if (g.use_recursive) {
+  if (!g.use_blocking) {
+    // no blocking (very slow), base function is directly called
+    base(vec3(0, 0, 0), size);
+  }
+  else if (g.use_recursive) {
     // Recursive algorithm
     
 #if VERBOSE >= 10
