@@ -56,55 +56,6 @@ long base_float_unpackA(REAL *A, long lda, REAL *buf)
   return base_float_unpack_gen(g.basesize.x, g.basesize.y, A, lda, buf);
 }
 
-// definitions used in kernels
-#define ONE_COL(L0, J0, CNAME) \
-  {							\
-    __m512 vb;						\
-    __m512 vsum;					\
-    __mmask16 mask;					\
-    vb = _mm512_set1_ps(B[(L0)+(J0)*lda]);		\
-    vsum = _mm512_add_ps(va0, vb);			\
-    mask = _mm512_cmp_ps_mask(vsum, CNAME, _CMP_LT_OQ);	\
-    CNAME = _mm512_mask_blend_ps(mask, CNAME, vsum);	\
-  }	
-
-
-#define ONE_STEP(L0)					\
-  {							\
-    __m512 va0 = _mm512_loadu_ps(&A[0+(L0)*lda]);		\
-    ONE_COL(L0, 0, vc00);				\
-    ONE_COL(L0, 1, vc01);				\
-    ONE_COL(L0, 2, vc02);				\
-    ONE_COL(L0, 3, vc03);				\
-    ONE_COL(L0, 4, vc04);				\
-    ONE_COL(L0, 5, vc05);				\
-    ONE_COL(L0, 6, vc06);				\
-    ONE_COL(L0, 7, vc07);				\
-    ONE_COL(L0, 8, vc08);				\
-    ONE_COL(L0, 9, vc09);				\
-    ONE_COL(L0, 10, vc0a);				\
-    ONE_COL(L0, 11, vc0b);				\
-    ONE_COL(L0, 12, vc0c);				\
-    ONE_COL(L0, 13, vc0d);				\
-    ONE_COL(L0, 14, vc0e);				\
-    ONE_COL(L0, 15, vc0f);				\
-  }
-
-#define CREAD(I0, J0) (_mm512_loadu_ps(&C[(I0)+(J0)*lda]))
-#define CWRITE(I0, J0, CNAME)				\
-  _mm512_storeu_ps(&C[(I0)+(J0)*lda], CNAME)
-
-#define CCLEAR(val) (_mm512_set1_ps(val))
-#define CUPDATE(I0, J0, CNAME)				\
-  {							\
-    __m512 v;						\
-    __mmask16 mask;					\
-    v = _mm512_loadu_ps(&C[(I0)+(J0)*lda]);		\
-    mask = _mm512_cmp_ps_mask(CNAME, v, _CMP_LT_OQ);	\
-    v = _mm512_mask_blend_ps(mask, v, CNAME);		\
-    _mm512_storeu_ps(&C[(I0)+(J0)*lda], v);		\
-  } 
-
 
 // Kernel1 (based on Rucci's)
 // This kernel can be used for pivot computation 
@@ -129,54 +80,105 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
   return 0;
 }
 
+// definitions used in kernels
+#define ONE_COL(L, J, CNAME) \
+  {							\
+    __m512 vb;						\
+    __m512 vsum;					\
+    __mmask16 mask;					\
+    vb = _mm512_set1_ps(B[(L)+(J)*lda]);		\
+    vsum = _mm512_add_ps(va0, vb);			\
+    mask = _mm512_cmp_ps_mask(vsum, CNAME, _CMP_LT_OQ);	\
+    CNAME = _mm512_mask_blend_ps(mask, CNAME, vsum);	\
+  }	
+
+
+#define ONE_STEP(I, J, L)				\
+  {							\
+    __m512 va0 = _mm512_loadu_ps(&A[(I)+(L)*lda]);	\
+    ONE_COL(L, J+0, vc00);				\
+    ONE_COL(L, J+1, vc01);				\
+    ONE_COL(L, J+2, vc02);				\
+    ONE_COL(L, J+3, vc03);				\
+    ONE_COL(L, J+4, vc04);				\
+    ONE_COL(L, J+5, vc05);				\
+    ONE_COL(L, J+6, vc06);				\
+    ONE_COL(L, J+7, vc07);				\
+    ONE_COL(L, J+8, vc08);				\
+    ONE_COL(L, J+9, vc09);				\
+    ONE_COL(L, J+10, vc0a);				\
+    ONE_COL(L, J+11, vc0b);				\
+    ONE_COL(L, J+12, vc0c);				\
+    ONE_COL(L, J+13, vc0d);				\
+    ONE_COL(L, J+14, vc0e);				\
+    ONE_COL(L, J+15, vc0f);				\
+  }
+
+#define CCLEAR(val) (_mm512_set1_ps(val))
+#define CUPDATE(I0, J0, CNAME)				\
+  {							\
+    __m512 v;						\
+    __mmask16 mask;					\
+    v = _mm512_loadu_ps(&C[(I0)+(J0)*lda]);		\
+    mask = _mm512_cmp_ps_mask(CNAME, v, _CMP_LT_OQ);	\
+    v = _mm512_mask_blend_ps(mask, v, CNAME);		\
+    _mm512_storeu_ps(&C[(I0)+(J0)*lda], v);		\
+  } 
+
 
 // Kernel2
 // This kernel is only for nonpivot computation, where A, B, C are distinct.
-// for size [DWIDTH,DWIDTH,k]
 int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, long lda)
 {
-  // designed for DWIDTHxDWIDTHx(mul of 4)
-  const REAL infval = 1.0e+8;
-
-  __m512 vc00 = CCLEAR(infval);
-  __m512 vc01 = CCLEAR(infval);
-  __m512 vc02 = CCLEAR(infval);
-  __m512 vc03 = CCLEAR(infval);
-  __m512 vc04 = CCLEAR(infval);
-  __m512 vc05 = CCLEAR(infval);
-  __m512 vc06 = CCLEAR(infval);
-  __m512 vc07 = CCLEAR(infval);
-  __m512 vc08 = CCLEAR(infval);
-  __m512 vc09 = CCLEAR(infval);
-  __m512 vc0a = CCLEAR(infval);
-  __m512 vc0b = CCLEAR(infval);
-  __m512 vc0c = CCLEAR(infval);
-  __m512 vc0d = CCLEAR(infval);
-  __m512 vc0e = CCLEAR(infval);
-  __m512 vc0f = CCLEAR(infval);
-
-  // incrementing 2 looks best. 1 or 4 is slower.
-  for (long l = 0; l < k; l += 2) {
-    ONE_STEP(l+0);
-    ONE_STEP(l+1);
+  long i, j;
+  const long sbs = DWIDTH; // small block
+  for (j = 0; j < n; j += DWIDTH) {
+#pragma unroll
+    for (i = 0; i < m; i += DWIDTH) {
+      // designed for DWIDTHxDWIDTHx(mul of 4)
+      const REAL infval = 1.0e+8;
+      
+      __m512 vc00 = CCLEAR(infval);
+      __m512 vc01 = CCLEAR(infval);
+      __m512 vc02 = CCLEAR(infval);
+      __m512 vc03 = CCLEAR(infval);
+      __m512 vc04 = CCLEAR(infval);
+      __m512 vc05 = CCLEAR(infval);
+      __m512 vc06 = CCLEAR(infval);
+      __m512 vc07 = CCLEAR(infval);
+      __m512 vc08 = CCLEAR(infval);
+      __m512 vc09 = CCLEAR(infval);
+      __m512 vc0a = CCLEAR(infval);
+      __m512 vc0b = CCLEAR(infval);
+      __m512 vc0c = CCLEAR(infval);
+      __m512 vc0d = CCLEAR(infval);
+      __m512 vc0e = CCLEAR(infval);
+      __m512 vc0f = CCLEAR(infval);
+      
+      // incrementing 2 looks best. 1 or 4 is slower.
+      for (long l = 0; l < k; l += 2) {
+	ONE_STEP(i, j, l+0);
+	ONE_STEP(i, j, l+1);
+      }
+      
+      CUPDATE(i, j+0, vc00);
+      CUPDATE(i, j+1, vc01);
+      CUPDATE(i, j+2, vc02);
+      CUPDATE(i, j+3, vc03);
+      CUPDATE(i, j+4, vc04);
+      CUPDATE(i, j+5, vc05);
+      CUPDATE(i, j+6, vc06);
+      CUPDATE(i, j+7, vc07);
+      CUPDATE(i, j+8, vc08);
+      CUPDATE(i, j+9, vc09);
+      CUPDATE(i, j+10, vc0a);
+      CUPDATE(i, j+11, vc0b);
+      CUPDATE(i, j+12, vc0c);
+      CUPDATE(i, j+13, vc0d);
+      CUPDATE(i, j+14, vc0e);
+      CUPDATE(i, j+15, vc0f);
+    }
   }
-
-  CUPDATE(0, 0, vc00);
-  CUPDATE(0, 1, vc01);
-  CUPDATE(0, 2, vc02);
-  CUPDATE(0, 3, vc03);
-  CUPDATE(0, 4, vc04);
-  CUPDATE(0, 5, vc05);
-  CUPDATE(0, 6, vc06);
-  CUPDATE(0, 7, vc07);
-  CUPDATE(0, 8, vc08);
-  CUPDATE(0, 9, vc09);
-  CUPDATE(0, 10, vc0a);
-  CUPDATE(0, 11, vc0b);
-  CUPDATE(0, 12, vc0c);
-  CUPDATE(0, 13, vc0d);
-  CUPDATE(0, 14, vc0e);
-  CUPDATE(0, 15, vc0f);
 
   //printf("after kernel (%ld,%ld,%ld): last of C is %lf\n", v0.x, v0.y, v0.z, C[15+15*ldc]);
   
@@ -186,8 +188,6 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
 
 #undef ONE_COL
 #undef ONE_STEP
-#undef CREAD
-#undef CWRITE
 #undef CUPDATE
 #undef CCLEAR
 
@@ -234,6 +234,9 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
     kernel_pivot_float_simd(bs, bs, bs, A, B, C, lda);
   }
   else {
+#if 1
+    kernel_nonpivot_float_simd(bs, bs, bs, A, B, C, lda);
+#else
     // divide task and each sub task size is [16,16,bs]
     long ib, jb;
     for (jb = 0; jb < bs; jb += sbs) {
@@ -242,6 +245,7 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
 	kernel_nonpivot_float_simd(sbs, sbs, bs, &A[ib], &B[lda*jb], &C[ib+lda*jb], lda);
       }
     }
+#endif
   }
 
 
