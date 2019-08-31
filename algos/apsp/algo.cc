@@ -40,9 +40,12 @@ int init_algo(int *argcp, char ***argvp)
   printf("[APSP:init_algo] ##################################################\n");
 #endif
 
-  g.task_thre = 32; //64; //128; //256; //512;
+  g.basesize = basesize_float_simd();
+  g.task_thre = g.basesize.x; //512;
   g.use_recursive = true;
+  g.use_exp_div = true;
   g.use_pack_mat = true;
+  g.use_2nd_kernel = true;
 
   // parse args
   while (argc >= 2) {
@@ -52,11 +55,30 @@ int init_algo(int *argcp, char ***argvp)
       argv++;
       argc--;
     }
-    if (strcmp(argv[1], "-npm") == 0) {
+    else if (strcmp(argv[1], "-ned") == 0) {
+      // no 2^i (exponential) division
+      g.use_exp_div = false;
+      argv++;
+      argc--;
+    }
+    else if (strcmp(argv[1], "-npm") == 0) {
       // no pack mat
       g.use_pack_mat = false;
       argv++;
       argc--;
+    }
+    else if (strcmp(argv[1], "-n2k") == 0) {
+      // no second kernel
+      g.use_2nd_kernel = false;
+      argv++;
+      argc--;
+    }
+    else if (strcmp(argv[1], "-bs") == 0) {
+      // set basesize
+      long s = atol(argv[2]);
+      g.basesize = vec3(s, s, s);
+      argv += 2;
+      argc -= 2;
     }
     else if (strcmp(argv[1], "-tt") == 0) {
       // set task threshold
@@ -76,29 +98,32 @@ int init_algo(int *argcp, char ***argvp)
   use_avx512 = 'Y';
 #endif
 
-  g.basesize = basesize_float_simd();
-
-  char *envstr;
-  envstr = getenv("TASK_THRE");
-  if (envstr != NULL) {
-    g.task_thre = atol(envstr);
-    if (g.task_thre < 16) {
-      printf("TASK_THRE(%ld) must be >=16 (such as 512)\n", g.task_thre);
-      exit(1);
-    }
+  if (g.basesize.x % 16 != 0) {
+    printf("basesize(%ld) is invalid\n", g.basesize.x);
+    exit(1);
   }
+
+  if (g.task_thre < 16) {
+    printf("TASK_THRE(%ld) must be >=16 (such as 512)\n", g.task_thre);
+    exit(1);
+  }
+  if (g.task_thre < g.basesize.x) g.task_thre = g.basesize.x;
+
 
 
 #if VERBOSE >= 5
   printf("[APSP:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c\n",
 	 use_avx2, use_avx512);
-  printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
-	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
-  printf("[APSP:init_algo] task_thre(-tt)=%ld, use_recursive(-nr)=%d, use_pack_mat(-npm)=%d\n",
-	 g.task_thre, g.use_recursive, g.use_pack_mat);
 #ifdef USE_OMP
   printf("[APSP:init_algo] #threads=%d\n", omp_get_max_threads());
 #endif
+  printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
+	 TYPENAME, g.basesize.x, g.basesize.y, g.basesize.z);
+  printf("[APSP:init_algo] -tt: task_thre=%ld\n", g.task_thre);
+  printf("[APSP:init_algo] -nr: recursive=%d\n", g.use_recursive);
+  printf("[APSP:init_algo] -ned: exp_div=%d\n", g.use_exp_div);
+  printf("[APSP:init_algo] -npm: pack_mat=%d\n", g.use_pack_mat);
+  printf("[APSP:init_algo] -n2k: 2nd_kernel=%d\n", g.use_2nd_kernel);
 #endif
 
 #if 1
@@ -210,11 +235,14 @@ inline int base(vec3 v0, vec3 v1)
   double et = 0.0;
   if (meas_kernel) st = Wtime();
 
-#ifdef USE_SECOND_KERNEL
-  bool onpivot = (v0.x == v0.z || v0.y == v0.z);
-#else
-  bool onpivot = true;
-#endif
+  bool onpivot;
+  if (g.use_2nd_kernel) {
+    onpivot = (v0.x == v0.z || v0.y == v0.z);
+  }
+  else {
+    // always 1st kernel is used
+    onpivot = true;
+  }
 
 #if 1
   base_float_simd(onpivot, v0, v1);
@@ -291,15 +319,17 @@ int recalgo(vec3 v0, vec3 v1)
     long len = cx;
     if (cy > len) len = cy;
     if (cz > len) len = cz;
-#if 0
-#warning USE_HALF_DIV
-    long chunklen = roundup(len/2, g.basesize.x);
-#else
-    long chunklen = g.basesize.x;
-    while (chunklen*2 < len) {
-      chunklen *= 2;
+
+    long chunklen;
+    if (g.use_exp_div) {
+      chunklen = g.basesize.x;
+      while (chunklen*2 < len) {
+	chunklen *= 2;
+      }
     }
-#endif
+    else {
+      chunklen = roundup(len/2, g.basesize.x);
+    }
     assert(chunklen > 0);
 
     // divide the task into 8

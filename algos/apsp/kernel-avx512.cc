@@ -11,11 +11,11 @@
 
 // SIMD width of float type in AVX512
 #define DWIDTH 16
-#define KERNEL_MAG 4 //2
+//#define KERNEL_MAG 4 //2
 
 vec3 basesize_float_simd()
 {
-  return vec3(DWIDTH*KERNEL_MAG, DWIDTH*KERNEL_MAG, DWIDTH*KERNEL_MAG);
+  return vec3(DWIDTH*4, DWIDTH*4, DWIDTH*4);
 }
 
 
@@ -201,7 +201,7 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
   long lda;
 
   const long sbs = DWIDTH; // small block
-  const long bs = DWIDTH*KERNEL_MAG; // large block
+  const long bs = g.basesize.x; // large block
   
   if (g.use_pack_mat) {
     // overwrite lda, ldb, ldc
@@ -227,25 +227,19 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
     C = &Am[v0.x + v0.y * lda];
   }
 
-  size_t coffs = sbs*lda;
-  size_t roffs = sbs;
-
-  //#define PARAMS(ib, jb, kb) A+roffs*(ib)+coffs*(kb), B+roffs*(kb)+coffs*(jb), C+roffs*(ib)+coffs*(jb)
-
-#ifndef USE_SECOND_KERNEL
-  onpivot = true;
-#endif
+  size_t coffs = lda;
+  size_t roffs = 1;
 
   if (onpivot) {
     kernel_pivot_float_simd(bs, bs, bs, A, B, C, lda);
   }
   else {
-    // divide task into KERNEL_MAG^2 (as large as possible)
+    // divide task and each sub task size is [16,16,bs]
     long ib, jb;
-    for (jb = 0; jb < KERNEL_MAG; jb++) {
+    for (jb = 0; jb < bs; jb += sbs) {
 #pragma unroll
-      for (ib = 0; ib < KERNEL_MAG; ib++) {
-	kernel_nonpivot_float_simd(sbs, sbs, bs, A+roffs*ib, B+coffs*jb, C+roffs*ib+coffs*jb, lda);
+      for (ib = 0; ib < bs; ib += sbs) {
+	kernel_nonpivot_float_simd(sbs, sbs, bs, &A[ib], &B[lda*jb], &C[ib+lda*jb], lda);
       }
     }
   }

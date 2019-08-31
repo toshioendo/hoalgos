@@ -16,13 +16,13 @@ HDRS =
 
 APP = apsp
 
-all: $(APP)
-#all: $(APP) meas1t
+#all: $(APP)
+all: $(APP) meas
 
 $(APP): $(OBJS)
 	$(LD) $(OBJS) -o $@ $(LDFLAGS)
 
-meas1t: meas1t.o algo.o  kernel-avx512.o
+meas: meas.o algo.o  kernel-avx512.o
 	$(LD) $^ -o $@ $(LDFLAGS)
 
 %.o : %.c $(HDRS)

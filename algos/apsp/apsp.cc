@@ -132,11 +132,11 @@ int main(int argc, char *argv[])
 
     algo(n, A, n);
 
-#if 0
+#if 1
     et = Wtime();
 
-    printf("\nsize=%ld (%d/%d) %.3lf sec -> %lf MFlops\n\n",
-	   n, i, niter, (et-st), nops/(et-st)/1000000.0);
+    printf("\nsize=%ld (%d/%d) %.3lf sec -> %lf GFlops\n\n",
+	   n, i, niter, (et-st), nops/(et-st)/1.0e+9);
 #endif
     printf("\n##### iteration %d/%d finished\n", i+1, niter);
 

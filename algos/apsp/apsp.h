@@ -26,9 +26,6 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-// kernel configuration
-//#define USE_SECOND_KERNEL
-
 #define VERBOSE 5 //10
 
 #include "vec3.h"
@@ -66,7 +63,9 @@ struct global {
   vec3 basesize; // preferable base case size
   long task_thre;
   bool use_recursive;
+  bool use_exp_div;
   bool use_pack_mat;
+  bool use_2nd_kernel;
 
   // buffer information allocated by user
   // valid during APSP computation
