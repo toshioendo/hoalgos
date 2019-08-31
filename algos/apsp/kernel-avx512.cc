@@ -83,19 +83,16 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
 // definitions used in kernels
 #define ONE_COL(L, J, CNAME) \
   {							\
-    __m512 vb;						\
-    __m512 vsum;					\
-    __mmask16 mask;					\
-    vb = _mm512_set1_ps(B[(L)+(J)*lda]);		\
-    vsum = _mm512_add_ps(va0, vb);			\
-    mask = _mm512_cmp_ps_mask(vsum, CNAME, _CMP_LT_OQ);	\
+    __m512 vb = _mm512_set1_ps(B[(L)+(J)*lda]);		\
+    __m512 vsum = _mm512_add_ps(va, vb);			\
+    __mmask16 mask = _mm512_cmp_ps_mask(vsum, CNAME, _CMP_LT_OQ);		\
     CNAME = _mm512_mask_blend_ps(mask, CNAME, vsum);	\
   }	
 
 
 #define ONE_STEP(I, J, L)				\
   {							\
-    __m512 va0 = _mm512_loadu_ps(&A[(I)+(L)*lda]);	\
+    __m512 va = _mm512_loadu_ps(&A[(I)+(L)*lda]);	\
     ONE_COL(L, J+0, vc00);				\
     ONE_COL(L, J+1, vc01);				\
     ONE_COL(L, J+2, vc02);				\
@@ -234,20 +231,8 @@ int base_float_simd(bool onpivot, vec3 v0, vec3 v1)
     kernel_pivot_float_simd(bs, bs, bs, A, B, C, lda);
   }
   else {
-#if 1
     kernel_nonpivot_float_simd(bs, bs, bs, A, B, C, lda);
-#else
-    // divide task and each sub task size is [16,16,bs]
-    long ib, jb;
-    for (jb = 0; jb < bs; jb += sbs) {
-#pragma unroll
-      for (ib = 0; ib < bs; ib += sbs) {
-	kernel_nonpivot_float_simd(sbs, sbs, bs, &A[ib], &B[lda*jb], &C[ib+lda*jb], lda);
-      }
-    }
-#endif
   }
-
 
   return 0;
 }
