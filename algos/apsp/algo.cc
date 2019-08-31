@@ -34,9 +34,11 @@ int init_algo(int *argcp, char ***argvp)
   int argc = *argcp;
   char **argv = *argvp;
 
+#if VERBOSE >= 5
   printf("[APSP:init_algo] ##################################################\n");
   printf("[APSP:init_algo] Hierarchy Oblivious All Pairs Shortest Path sample\n");
   printf("[APSP:init_algo] ##################################################\n");
+#endif
 
   g.task_thre = 32; //64; //128; //256; //512;
   g.use_recursive = true;
@@ -87,6 +89,7 @@ int init_algo(int *argcp, char ***argvp)
   }
 
 
+#if VERBOSE >= 5
   printf("[APSP:init_algo]  Compile time options: USE_AVX2 %c, USE_AVX512 %c\n",
 	 use_avx2, use_avx512);
   printf("[APSP:init_algo] type=[%s] basesize=(%ld,%ld,%ld)\n",
@@ -95,6 +98,7 @@ int init_algo(int *argcp, char ***argvp)
 	 g.task_thre, g.use_recursive, g.use_pack_mat);
 #ifdef USE_OMP
   printf("[APSP:init_algo] #threads=%d\n", omp_get_max_threads());
+#endif
 #endif
 
 #if 1
@@ -206,7 +210,11 @@ inline int base(vec3 v0, vec3 v1)
   double et = 0.0;
   if (meas_kernel) st = Wtime();
 
+#ifdef USE_SECOND_KERNEL
   bool onpivot = (v0.x == v0.z || v0.y == v0.z);
+#else
+  bool onpivot = true;
+#endif
 
 #if 1
   base_float_simd(onpivot, v0, v1);
@@ -284,6 +292,7 @@ int recalgo(vec3 v0, vec3 v1)
     if (cy > len) len = cy;
     if (cz > len) len = cz;
 #if 0
+#warning USE_HALF_DIV
     long chunklen = roundup(len/2, g.basesize.x);
 #else
     long chunklen = g.basesize.x;
@@ -501,8 +510,10 @@ int blockalgo()
 
 int algo(long n, REAL *Am, long lda)
 {
+#if VERBOSE >= 10
   printf("[APSP:algo] type=[%s] size=%ld\n",
 	 TYPENAME, n);
+#endif
 
   if (n % g.basesize.x != 0) {
     printf("[APSP:algo] ERROR: currently, size (%ld) must be a multiple of %ld\n",
@@ -569,6 +580,7 @@ int algo(long n, REAL *Am, long lda)
   }
 
   double elapsed = Wtime() - starttime;
+#if VERBOSE >= 10
 
   printf("[APSP:algo] kernel1: %.3lf sec, %ld times (avg %.3lf us)\n",
 	 kernel1time, kernel1count, 1000000.0*kernel1time/kernel1count);
@@ -580,6 +592,7 @@ int algo(long n, REAL *Am, long lda)
   double nops = (double)n*n*n*2.0;
   printf("[APSP:algo] size=%ld elapsed: %.3lf sec -> %.1lf MFlops\n",
 	 n, elapsed, nops/elapsed/1000000.0);
+#endif
 
   return 0;
 }

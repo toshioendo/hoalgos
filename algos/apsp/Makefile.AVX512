@@ -15,10 +15,15 @@ OBJS = apsp.o algo.o  kernel-avx512.o
 HDRS = 
 
 APP = apsp
+
 all: $(APP)
+#all: $(APP) meas1t
 
 $(APP): $(OBJS)
 	$(LD) $(OBJS) -o $@ $(LDFLAGS)
+
+meas1t: meas1t.o algo.o  kernel-avx512.o
+	$(LD) $^ -o $@ $(LDFLAGS)
 
 %.o : %.c $(HDRS)
 	$(CC) $(CFLAGS) -c $< -o $*.o

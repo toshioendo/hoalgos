@@ -27,10 +27,9 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 };
 
 // kernel configuration
-#define KERNEL_MAG 4 //2
-#define USE_SECOND_KERNEL
+//#define USE_SECOND_KERNEL
 
-#define VERBOSE 10
+#define VERBOSE 5 //10
 
 #include "vec3.h"
 

@@ -11,6 +11,7 @@
 
 // SIMD width of float type in AVX512
 #define DWIDTH 16
+#define KERNEL_MAG 4 //2
 
 vec3 basesize_float_simd()
 {
