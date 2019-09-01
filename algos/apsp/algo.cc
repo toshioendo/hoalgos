@@ -51,6 +51,8 @@ int init_algo(int *argcp, char ***argvp)
 
   g.breakpoint = -1;
 
+  long initial_buf_base = 0;
+
   // parse args
   while (argc >= 2) {
     if (strcmp(argv[1], "-nb") == 0) {
@@ -93,6 +95,12 @@ int init_algo(int *argcp, char ***argvp)
     else if (strcmp(argv[1], "-tt") == 0) {
       // set task threshold
       g.task_thre = atol(argv[2]);
+      argv += 2;
+      argc -= 2;
+    }
+    else if (strcmp(argv[1], "-ib") == 0) {
+      // allocate pack-buffer now
+      initial_buf_base = atol(argv[2]);
       argv += 2;
       argc -= 2;
     }
@@ -143,15 +151,20 @@ int init_algo(int *argcp, char ***argvp)
   printf("[APSP:init_algo] -n2k: 2nd_kernel=%d\n", g.use_2nd_kernel);
 #endif
 
-#if 1
+  
   g.bufsize = 0L;
   g.buf = NULL;
-#else
-  // for internal copy buffer
-  g.bufsize = 4L*1024*1024*1024;
-  g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
-  printf("[APSP:init_algo] bufsize=%ld*%ld=%ld Bytes\n", g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
-#endif
+  if (g.use_pack_mat && initial_buf_base > 0) {
+    g.bufsize = initial_buf_base*initial_buf_base;
+    g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
+
+#pragma omp parallel for schedule(static, 1024)
+    for (long i = 0; i < g.bufsize; i++) {
+      g.buf[i] = (REAL)0.0;
+    }
+    printf("[APSP:init_algo] Allocated buffer eagerly: bufsize=%ld*%ld=%ld Bytes\n", 
+	   g.bufsize, sizeof(REAL), sizeof(REAL)*g.bufsize);
+  }
 
   *argcp = argc;
   *argvp = argv;
@@ -602,7 +615,7 @@ int algo(long n, REAL *Am, long lda)
   }
 
   vec3 size = vec3(n, n, n);
-  if (g. breakpoint > 0 && g.breakpoint < n) {
+  if (g.breakpoint > 0 && g.breakpoint < n) {
 #if VERBOSE >= 5
     printf("[APSP:algo] Set breakpoint %ld < %ld\n", g.breakpoint, n);
 #endif

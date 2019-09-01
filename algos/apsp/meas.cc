@@ -112,13 +112,16 @@ int main(int argc, char *argv[])
   homm_init();
   init_algo(&argc, &argv);
   
-  if (argc < 3) {
+  if (argc < 2) {
     printf("Specify max-size and step-size\n");
     exit(1);
   }
 
   n = atol(argv[1]); // maximum
-  step = atol(argv[2]);
+  if (argc >= 3) {
+    step = atol(argv[2]);
+  }
+  else step = n;
 
 
   init_mat(n, &A); // allocate maximum size
@@ -126,9 +129,9 @@ int main(int argc, char *argv[])
   // warm-up
   printf("warming up...\n"); fflush(0);
   rand_mat(n, A);
-  algo_set_breakpoint(1024); // make warming up short
+  algo_set_breakpoint(256); // make warming up short
   algo(n, A, n);
-  algo_set_breakpoint(-1);
+  //algo_set_breakpoint(-1); // make warming up short
   printf("warming up finished\n");  fflush(0);
   printf("---\n");
 
@@ -140,11 +143,15 @@ int main(int argc, char *argv[])
   }
   printf("---\n");
 
+  long bp = 2048;
+  algo_set_breakpoint(bp); // make warming up short
+
   // main computation
   for (size = step; size <= n; size += step) {
     int i;
     int niter = 3;
-    double nops = (double)size*size*size*2.0 * niter;
+    double k = (bp > 0 && bp < size)? bp: size;
+    double nops = (double)size*size*k*2.0 * niter;
     double elapsed = 0.0;
     for (i = 0; i < niter; i++) {
       rand_mat(size, A);

@@ -26,7 +26,7 @@ void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
 	      const REAL *, REAL *, FINT);
 };
 
-#define VERBOSE 5 //10
+#define VERBOSE 5
 
 #include "vec3.h"
 

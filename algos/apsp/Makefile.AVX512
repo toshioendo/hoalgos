@@ -16,8 +16,8 @@ HDRS =
 
 APP = apsp
 
-#all: $(APP)
-all: $(APP) meas
+all: $(APP)
+#all: $(APP) meas
 
 $(APP): $(OBJS)
 	$(LD) $(OBJS) -o $@ $(LDFLAGS)
