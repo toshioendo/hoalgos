@@ -12,6 +12,12 @@ A simple 3D stencil sample with temporal blocking
 
 Dense matrix multuply with recursive divide and conquer
 
+* all pairs shortest path (algos/apsp)
+
+Solve all pairs shortest path problem by Floyd-Warshall algorithm
+with recursive divide and conquer approach
+
+
 ## References
 
 Toshio Endo. Applying Recursive Temporal Blocking for Stencil Computations to Deeper Memory Hierarchy. In proceedings of the 7th IEEE Non-Volatile Memory Systems and Applications Symposium (NVMSA 2018). Aug 2018. 

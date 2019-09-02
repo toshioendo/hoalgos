@@ -9,9 +9,10 @@
 #include <homm.h>
 #include "apsp.h"
 
+//#define USE_ZMM_ARRAY
+
 // SIMD width of float type in AVX512
 #define DWIDTH 16
-//#define KERNEL_MAG 4 //2
 
 vec3 basesize_float_simd()
 {
@@ -89,6 +90,17 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
     CNAME = _mm512_mask_blend_ps(mask, CNAME, vsum);	\
   }	
 
+#ifdef USE_ZMM_ARRAY
+
+#define ONE_STEP(I, J, L)				\
+  {							\
+    __m512 va = _mm512_loadu_ps(&A[(I)+(L)*lda]);	\
+    for (long jj = 0; jj < 16; jj++) {			\
+      ONE_COL(L, J+jj, vcs[jj]);			\
+    }							\
+  }
+
+#else // !USE_ZMM_ARRAY
 
 #define ONE_STEP(I, J, L)				\
   {							\
@@ -110,6 +122,7 @@ int kernel_pivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C, l
     ONE_COL(L, J+14, vc0e);				\
     ONE_COL(L, J+15, vc0f);				\
   }
+#endif // !USE_ZMM_ARRAY
 
 #define CCLEAR(val) (_mm512_set1_ps(val))
 #define CUPDATE(I0, J0, CNAME)				\
@@ -134,7 +147,13 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
     for (i = 0; i < m; i += DWIDTH) {
       // designed for DWIDTHxDWIDTHx(mul of 4)
       const REAL infval = 1.0e+8;
-      
+
+#ifdef USE_ZMM_ARRAY
+      __m512 vcs[16];
+      for (long jj = 0; jj < 16; jj++) {
+	vcs[jj] = CCLEAR(infval);
+      }
+#else // !USE_ZMM_ARRAY      
       __m512 vc00 = CCLEAR(infval);
       __m512 vc01 = CCLEAR(infval);
       __m512 vc02 = CCLEAR(infval);
@@ -151,13 +170,19 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
       __m512 vc0d = CCLEAR(infval);
       __m512 vc0e = CCLEAR(infval);
       __m512 vc0f = CCLEAR(infval);
+#endif // !USE_ZMM_ARRAY      
       
       // incrementing 2 looks best. 1 or 4 is slower.
       for (long l = 0; l < k; l += 2) {
 	ONE_STEP(i, j, l+0);
 	ONE_STEP(i, j, l+1);
       }
-      
+
+#ifdef USE_ZMM_ARRAY
+      for (long jj = 0; jj < 16; jj++) {
+	CUPDATE(i, j+jj, vcs[jj]);
+      }
+#else      
       CUPDATE(i, j+0, vc00);
       CUPDATE(i, j+1, vc01);
       CUPDATE(i, j+2, vc02);
@@ -174,6 +199,7 @@ int kernel_nonpivot_float_simd(long m, long n, long k, REAL *A, REAL *B, REAL *C
       CUPDATE(i, j+13, vc0d);
       CUPDATE(i, j+14, vc0e);
       CUPDATE(i, j+15, vc0f);
+#endif
     }
   }
 
