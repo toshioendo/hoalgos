@@ -10,7 +10,7 @@ under construction
 
 * all pairs shortest path [./algos/apsp](./algos/apsp): Solve all pairs shortest path problem by Floyd-Warshall algorithm with recursive divide and conquer approach
 
-[./algos/apsp](all pairs shortest path)
+[all pairs shortest path](./algos/apsp)
 
 ## References
 
