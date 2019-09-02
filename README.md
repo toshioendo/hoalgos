@@ -8,8 +8,9 @@ under construction
 
 * matrix multiply [./algos/matmul](./algos/matmul): Dense matrix multuply with recursive divide and conquer
 
-* all pairs shortest [./algos/apsp](./algos/apsp): Solve all pairs shortest path problem by Floyd-Warshall algorithm with recursive divide and conquer approach
+* all pairs shortest path [./algos/apsp](./algos/apsp): Solve all pairs shortest path problem by Floyd-Warshall algorithm with recursive divide and conquer approach
 
+[./algos/apsp](all pairs shortest path)
 
 ## References
 
