@@ -4,11 +4,12 @@ under construction
 
 ## Algorithm samples
 
-* stencil [./algos/stencil](./algos/stencil) : A simple 3D stencil sample with recursive temporal blocking
+* [stencil](./algos/stencil) : A simple 3D stencil sample with recursive temporal blocking
 
-* matrix multiply [./algos/matmul](./algos/matmul): Dense matrix multuply with recursive divide and conquer
+* [matrix multiply](./algos/matmul): Dense matrix multuply with recursive divide and conquer
 
-* all pairs shortest [./algos/apsp](./algos/apsp): Solve all pairs shortest path problem by Floyd-Warshall algorithm with recursive divide and conquer approach
+* [all pairs shortest path](./algos/apsp): Solve all pairs shortest path problem by Floyd-Warshall algorithm with recursive divide and conquer approach
+
 
 
 ## References
