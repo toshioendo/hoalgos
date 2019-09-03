@@ -449,10 +449,17 @@ int recalgo(vec3 v0, vec3 v1)
 
 int pack_mats(long n)
 {
+  double st = Wtime();
+
+#if 01
+  g.Abuf = g.buf;
+  g.PAdesc->pack(g.Amat, g.Adesc, g.Abuf);
+  g.nb = g.PAdesc->nbm;
+#else
+
   REAL *Am = g.Amat;
   long lda = g.lda;
 
-  double st = Wtime();
   long nup = roundup(n, g.basesize.x);
   if (nup*nup > g.bufsize) {
     printf("[pack_mats] n=%d is too large to buffer. to be fixed\n", n);
@@ -465,20 +472,19 @@ int pack_mats(long n)
   REAL *p = g.buf;
   g.Abuf = p;
 
-  long jb;
 #if 1 && defined USE_OMP
 #pragma omp parallel for
 #endif
-  for (jb = 0; jb < g.nb; jb ++) {
-    long ib;
+  for (long jb = 0; jb < g.nb; jb ++) {
     long j = jb*g.basesize.y;
-    for (ib = 0; ib < g.nb; ib ++) {
+    for (long ib = 0; ib < g.nb; ib ++) {
       long i = ib*g.basesize.x;
 
       base_float_packA(&Am[i+j*lda], lda, &g.Abuf[(ib+jb*g.nb)*blocklen]);
     }
   }
   p += g.nb*g.nb*blocklen;
+#endif
 
   double et = Wtime();
   copytime += (et-st);
@@ -488,28 +494,32 @@ int pack_mats(long n)
 
 int unpack_mats(long n)
 {
+  double st = Wtime();
+#if 01
+  g.PAdesc->unpack(g.Amat, g.Adesc, g.Abuf);
+#else
+
   REAL *Am = g.Amat;
   long lda = g.lda;
 
-  double st = Wtime();
   long nup = roundup(n, g.basesize.x);
 
   long blocklen = g.basesize.x*g.basesize.y; // in words
   REAL *p = g.Abuf;
-  long jb;
+
 #if 1 && defined USE_OMP
 #pragma omp parallel for
 #endif
-  for (jb = 0; jb < g.nb; jb ++) {
-    long ib;
+  for (long jb = 0; jb < g.nb; jb ++) {
     long j = jb*g.basesize.y;
-    for (ib = 0; ib < g.nb; ib ++) {
+    for (long ib = 0; ib < g.nb; ib ++) {
       long i = ib*g.basesize.x;
 
       base_float_unpackA(&Am[i+j*lda], lda, &g.Abuf[(ib+jb*g.nb)*blocklen]);
     }
   }
   p += g.nb*g.nb*blocklen;
+#endif
 
   double et = Wtime();
   copytime += (et-st);
@@ -597,17 +607,34 @@ int algo(long n, REAL *Am, long lda)
 
   // save input information
   g.Amat = Am;
+#if 01
+  // define shape of matrix
+  g.Adesc = new ColMajorDesc();
+  g.Adesc->rows = n;
+  g.Adesc->cols = n;
+  g.Adesc->ld = n;
+
+  g.PAdesc = NULL;
+#endif
   g.lda = lda;
 
   if (g.use_pack_mat) {
-    if (n*n > g.bufsize) {
+#if 01
+    // shape of packed matrix
+    g.PAdesc = new BlockDesc(g.basesize.x, g.basesize.y);
+    size_t req_bufsize = g.PAdesc->getSize(g.Adesc);
+#else
+    size_t req_bufsize = n*n;
+#endif
+    printf("[algo] req_bufsize=%ld for pack\n", req_bufsize);
+    if (req_bufsize > g.bufsize) {
       // allocate internal copy buffer eagerly
       if (g.buf != NULL) {
 	homm_gfree(g.buf);
 	g.buf = NULL;
 	g.bufsize = 0;
       }
-      g.bufsize = n*n;
+      g.bufsize = req_bufsize;
       g.buf = (REAL*)homm_galloc(sizeof(REAL)*g.bufsize);
     }
     

@@ -16,19 +16,11 @@
 #  define USE_DOUBLE
 #endif
 
-#define FCHAR char *
-#define BLASINT int
-#define FINT BLASINT *
-
-extern "C" {
-void GEMM(FCHAR, FCHAR, FINT, FINT, FINT, \
-	      const REAL *, const REAL *, FINT, const REAL *, FINT,	\
-	      const REAL *, REAL *, FINT);
-};
-
 #define VERBOSE 10
 
 #include "vec3.h"
+#include "matdesc.h"
+
 
 vec3 basesize_float_simd();
 
@@ -73,7 +65,7 @@ struct global {
   // valid during APSP computation
   REAL *Amat;
   long lda;
-  //long n;
+  ColMajorDesc *Adesc;
 
   long breakpoint; // only for debug or warming up. -1 if ignored
 
@@ -81,8 +73,9 @@ struct global {
   // valid if use_pack_mat
   long bufsize; // size in words
   REAL *buf;
-  REAL *Abuf; //packed A
   long nb;
+  REAL *Abuf; //packed A
+  BlockDesc *PAdesc;
 };
 
 extern global g;
